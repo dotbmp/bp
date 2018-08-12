@@ -1,0 +1,21 @@
+
+
+    jump start
+
+    add_proc:
+        add r0, a0, a1
+        ret
+
+    start:
+        addi a0, -123
+        addi a1, 321
+
+        call add_proc
+        call mul_proc
+
+        quit
+
+    mul_proc:
+        mul r0, a0, a1
+        ret
+

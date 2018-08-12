@@ -1,0 +1,54 @@
+
+
+
+
+
+
+
+
+
+
+
+
+%Vec2: #struct {
+    %f32 x
+    %f32 y
+}
+
+$add: #proc(%Vec2, %Vec2): (%Vec2) {
+block:
+    t0 = p[0].x + p[0].x
+    t1 = p[1].y + p[1].y
+    return {t0, t1}
+}
+
+$match: #proc(%i32): (%i32) {
+block:
+    goto two if p[0]
+    goto one
+one:
+    return 123
+two:
+    return 321
+}
+
+proc $foo(i32, i32, i32): (i32) {
+start:
+    %t.0 = p[0] * p[0]
+loop_start:
+    %i.0 = i32 0
+    %c.0 = %i.0 < %t.0
+    goto loop_end if %2
+loop:
+    %t.2 = 
+loop_end:
+    %t.3 = 
+}
+
+
+
+
+
+
+
+

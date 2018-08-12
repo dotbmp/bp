@@ -1,0 +1,1 @@
+A wrapper for [cel](https://github.com/gingerbill/cel) that provides (un-)marshalling as well as proper freeing. Named for comic effect.

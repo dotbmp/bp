@@ -1,0 +1,15 @@
+
+
+    addi a0, -123
+    addi a1, +321
+    add a2, a0, a1
+
+    jump extra
+
+    stop:
+        quit
+
+    extra:
+@       addi a3, +101
+        jump stop
+
