@@ -6,7 +6,7 @@
  *  @Creation: 21-06-2018 13:14:40 UTC-5
  *
  *  @Last By:   Brendan Punsky
- *  @Last Time: 06-07-2018 00:05:25 UTC-5
+ *  @Last Time: 12-08-2018 22:08:58 UTC-5
  *  
  *  @Description:
  *  
@@ -64,7 +64,7 @@ next_char :: inline proc(using lexer : ^Lexer) -> (res : rune) {
     index += skip;
     chars += 1;
 
-    res, skip = utf8.decode_rune_from_string(text[index..]);
+    res, skip = utf8.decode_rune_from_string(text[index:]);
 
     return;
 }
@@ -115,12 +115,12 @@ lex :: proc(source : string) -> []Token {
         token.cursor = cursor;
 
         switch char {
-        case 'A'...'Z', 'a'...'z', '_':
+        case 'A'..'Z', 'a'..'z', '_':
             token.kind = Ident;
 
             for {
                 switch char = next_char(&lexer); char {
-                case 'A'...'Z', 'a'...'z', '0'...'9', '_':
+                case 'A'..'Z', 'a'..'z', '0'..'9', '_':
                     continue;
 
                 case ':':
@@ -173,7 +173,7 @@ lex :: proc(source : string) -> []Token {
 
             for {
                 switch char = next_char(&lexer); char {
-                case 'A'...'Z', 'a'...'z', '0'...'9', '_':
+                case 'A'..'Z', 'a'..'z', '0'..'9', '_':
                     continue;
                 }
 
@@ -190,7 +190,7 @@ lex :: proc(source : string) -> []Token {
 
             for {
                 switch char = next_char(&lexer); char {
-                case '0'...'9':
+                case '0'..'9':
                     continue;
 
                 case '.':
@@ -206,12 +206,12 @@ lex :: proc(source : string) -> []Token {
                 break;
             }
 
-        case '0'...'9':
+        case '0'..'9':
             token.kind = Unsigned;
 
             for {
                 switch char = next_char(&lexer); char {
-                case '0'...'9':
+                case '0'..'9':
                     continue;
 
                 case '.':
@@ -253,12 +253,12 @@ lex :: proc(source : string) -> []Token {
             return nil;
         }
 
-        token.text = source[token.index..cursor.index];
+        token.text = source[token.index:cursor.index];
 
         append(&tokens, token);
     }
 
     append(&tokens, Token{kind=End});
 
-    return tokens[..];
+    return tokens[:];
 }

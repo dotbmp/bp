@@ -6,7 +6,7 @@
  *  @Creation: 29-05-2018 09:51:15 UTC-5
  *
  *  @Last By:   Brendan Punsky
- *  @Last Time: 01-06-2018 19:10:22 UTC-5
+ *  @Last Time: 12-08-2018 21:08:10 UTC-5
  *  
  *  @Description:
  *  
@@ -26,10 +26,12 @@ SEPARATOR :: '\\';
 
 
 long :: proc(path : string) -> string {
-    foreign kernel32 GetLongPathNameA :: proc "std" (short, long : ^byte, len : u32) -> u32 ---;
+    foreign kernel32 {
+        GetLongPathNameA :: proc "std" (short, long : ^byte, len : u32) -> u32 ---;
+    }
 
     c_path := strings.new_cstring(path);
-    defer free(c_path);
+    defer delete(c_path);
 
     length := GetLongPathNameA(cast(^byte) c_path, nil, 0);
 
@@ -38,17 +40,19 @@ long :: proc(path : string) -> string {
 
         GetLongPathNameA(cast(^byte) c_path, &buf[0], length);
 
-        return cast(string) buf[..length-1];
+        return cast(string) buf[:length-1];
     }
 
     return "";
 }
 
 short :: proc(path : string) -> string {
-    foreign kernel32 GetShortPathNameA :: proc "std" (long, short : ^byte, len : u32) -> u32 ---;
+    foreign kernel32 {
+        GetShortPathNameA :: proc "std" (long, short : ^byte, len : u32) -> u32 ---;
+    }
 
     c_path := strings.new_cstring(path);
-    defer free(c_path);
+    defer delete(c_path);
 
     length := GetShortPathNameA(cast(^byte) c_path, nil, 0);
 
@@ -57,17 +61,19 @@ short :: proc(path : string) -> string {
 
         GetShortPathNameA(cast(^byte) c_path, &buf[0], length);
 
-        return cast(string) buf[..length-1];
+        return cast(string) buf[:length-1];
     }
 
     return "";
 }
 
 full :: proc(path : string) -> string {
-    foreign kernel32 GetFullPathNameA :: proc "std" (filename : ^byte, buffer_length : u32, buffer : ^byte, file_part : ^^byte) -> u32 ---;
+    foreign kernel32 {
+        GetFullPathNameA :: proc "std" (filename : ^byte, buffer_length : u32, buffer : ^byte, file_part : ^^byte) -> u32 ---;
+    }
 
     c_path := strings.new_cstring(path);
-    defer free(c_path);
+    defer delete(c_path);
 
     length := GetFullPathNameA(cast(^byte) c_path, 0, nil, nil);
 
@@ -76,7 +82,7 @@ full :: proc(path : string) -> string {
 
         GetFullPathNameA(cast(^byte) c_path, length, &buf[0], nil);
 
-        return cast(string) buf[..length-1];
+        return cast(string) buf[:length-1];
     }
 
     return "";
@@ -85,7 +91,9 @@ full :: proc(path : string) -> string {
 
 
 current :: proc() -> string {
-    foreign kernel32 GetCurrentDirectoryA :: proc "std" (buffer_length : u32, buffer : ^byte) -> u32 ---;
+    foreign kernel32 {
+        GetCurrentDirectoryA :: proc "std" (buffer_length : u32, buffer : ^byte) -> u32 ---;
+    }
 
     length := GetCurrentDirectoryA(0, nil);
 
@@ -94,7 +102,7 @@ current :: proc() -> string {
 
         GetCurrentDirectoryA(length, &buf[0]);
 
-        return cast(string) buf[..length-1];
+        return cast(string) buf[:length-1];
     }
 
     return "";
@@ -104,7 +112,7 @@ current :: proc() -> string {
 
 exists :: proc(path : string) -> bool {
     c_path := strings.new_cstring(path);
-    defer free(c_path);
+    defer delete(c_path);
 
     attribs := win32.get_file_attributes_a(c_path);
 
@@ -113,7 +121,7 @@ exists :: proc(path : string) -> bool {
 
 is_dir :: proc(path : string) -> bool {
     c_path := strings.new_cstring(path);
-    defer free(c_path);
+    defer delete(c_path);
 
     attribs := win32.get_file_attributes_a(c_path);
 
@@ -122,7 +130,7 @@ is_dir :: proc(path : string) -> bool {
 
 is_file :: proc(path : string) -> bool {
     c_path := strings.new_cstring(path);
-    defer free(c_path);
+    defer delete(c_path);
 
     attribs := win32.get_file_attributes_a(c_path);
 
@@ -133,7 +141,7 @@ is_file :: proc(path : string) -> bool {
 
 drive :: proc(path : string, new := false) -> string {
     if len(path) >= 3 {
-        letter := path[..1];
+        letter := path[:1];
 
         if path[1] == ':' && (path[2] == '\\' || path[2] == '/') {
             return letter;

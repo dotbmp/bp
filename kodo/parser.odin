@@ -6,7 +6,7 @@
  *  @Creation: 16-06-2018 04:00:18 UTC-5
  *
  *  @Last By:   Brendan Punsky
- *  @Last Time: 09-08-2018 22:22:00 UTC-5
+ *  @Last Time: 12-08-2018 22:10:22 UTC-5
  *  
  *  @Description:
  *  
@@ -19,8 +19,8 @@ import "core:os"
 import "core:strconv"
 import "core:strings"
 
-import "cio:kodo/ast"
-import "cio:kodo/util"
+import "bp:kodo/ast"
+import "bp:kodo/util"
 
 
 

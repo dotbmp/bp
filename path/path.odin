@@ -6,7 +6,7 @@
  *  @Creation: 28-11-2017 00:10:03 UTC-5
  *
  *  @Last By:   Brendan Punsky
- *  @Last Time: 01-06-2018 19:12:59 UTC-5
+ *  @Last Time: 12-08-2018 21:08:38 UTC-5
  *  
  *  @Description:
  *  
@@ -24,7 +24,7 @@ dir :: proc(path: string, new := false) -> string {
         for i := len(path)-1; i >= 0; i -= 1 {
             switch path[i] {
             case '/', '\\':
-                return new ? strings.new_string(path[..i]) : path[..i];
+                return new ? strings.new_string(path[:i]) : path[:i];
             }
         }
     }
@@ -40,7 +40,7 @@ file :: proc(path : string, new := false) -> string {
             switch path[i] {
                 case '/', '\\':
                     if i != end {
-                        return new ? strings.new_string(path[i+1..]) : path[i+1..];
+                        return new ? strings.new_string(path[i+1:]) : path[i+1:];
                     }
                     else {
                         return ""; // @note(bpunsky): only a directory could have `/` or `\` at the end, this should never be reached
@@ -60,7 +60,7 @@ name :: proc(path : string, new := false) -> string {
         for i := end; i >= 0; i -= 1 {
             switch path[i] {
             case '.':       dot = (dot == end ? i : dot);
-            case '/', '\\': return new ? strings.new_string(path[i+1..dot]) : path[i+1..dot];
+            case '/', '\\': return new ? strings.new_string(path[i+1:dot]) : path[i+1:dot];
             }
         }
     }
@@ -73,7 +73,7 @@ ext :: proc(path : string, new := false) -> string {
         for i := len(path)-1; i >= 0; i -= 1 {
             switch path[i] {
             case '/', '\\': return "";
-            case '.':       return new ? strings.new_string(path[i+1..]) : path[i+1..];
+            case '.':       return new ? strings.new_string(path[i+1:]) : path[i+1:];
             }
         }
     }
@@ -112,8 +112,8 @@ rel_between :: proc(from, to: string) -> string {
             break;
         }
 
-        lchar, skip := utf8.decode_rune_from_string(from[index..]);
-        rchar, _    := utf8.decode_rune_from_string(to[index..]);
+        lchar, skip := utf8.decode_rune_from_string(from[index:]);
+        rchar, _    := utf8.decode_rune_from_string(to[index:]);
 
         if (lchar == '/' || lchar == '\\') && (rchar == '/' || lchar == '\\') {
             slash = index;
@@ -134,7 +134,7 @@ rel_between :: proc(from, to: string) -> string {
     to_slashes   := 0;
 
     if slash < len(from) {
-        from = from[slash+1..];
+        from = from[slash+1:];
         
         if from_is_dir {
             from_slashes += 1;
@@ -145,7 +145,7 @@ rel_between :: proc(from, to: string) -> string {
     }
 
     if slash < len(to) {
-        to = to[slash+1..];
+        to = to[slash+1:];
 
         if to_is_dir {
             to_slashes += 1;
@@ -172,7 +172,7 @@ rel_between :: proc(from, to: string) -> string {
 
         buffer[0] = '.';
         buffer[1] = SEPARATOR;
-        copy(buffer[2..], ([]byte)(to));
+        copy(buffer[2:], ([]byte)(to));
 
         return string(buffer);
     }
@@ -185,7 +185,7 @@ rel_between :: proc(from, to: string) -> string {
             buffer[i*3+2] = SEPARATOR;
         }
 
-        copy(buffer[from_slashes*3..], ([]byte)(to));
+        copy(buffer[from_slashes*3:], ([]byte)(to));
 
         return string(buffer);
     }
@@ -195,7 +195,7 @@ rel_between :: proc(from, to: string) -> string {
 
 rel_current :: proc(to: string) -> string {
     tmp := current();
-    defer free(tmp);
+    defer delete(tmp);
 
     return rel_between(tmp, to);
 }

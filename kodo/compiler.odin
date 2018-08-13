@@ -6,7 +6,7 @@
  *  @Creation: 08-06-2018 18:12:54 UTC-5
  *
  *  @Last By:   Brendan Punsky
- *  @Last Time: 09-08-2018 22:28:09 UTC-5
+ *  @Last Time: 12-08-2018 22:11:23 UTC-5
  *  
  *  @Description:
  *  
@@ -17,12 +17,12 @@ package kodo
 import "core:fmt"
 import "core:os"
 
-import "cio:kodo/ast"
-import "cio:kodo/gen/c"
+import "bp:kodo/ast"
+import "bp:kodo/gen/c"
 
 import "bp:process"
 
-import path "shared:odin-path"
+import "bp:path"
 
 
 
@@ -42,7 +42,7 @@ main :: proc() {
         fmt.println();
 
         dir  := path.dir(FILE_NAME);
-        name := path.file_name(FILE_NAME);
+        name := path.name(FILE_NAME);
         
         c_file := fmt.aprintf("%s/%s.c", dir, name);
         exe    := fmt.aprintf("%s/%s.exe", dir, name);

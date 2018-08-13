@@ -6,7 +6,7 @@
  *  @Creation: 01-06-2018 19:21:54 UTC-5
  *
  *  @Last By:   Brendan Punsky
- *  @Last Time: 09-08-2018 22:23:17 UTC-5
+ *  @Last Time: 12-08-2018 22:11:03 UTC-5
  *  
  *  @Description:
  *  
@@ -18,8 +18,8 @@ import "core:fmt"
 import "core:mem"
 import "core:os"
 
-import "cio:kodo/ast"
-import "cio:kodo/util"
+import "bp:kodo/ast"
+import "bp:kodo/util"
 
 
 
