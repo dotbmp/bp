@@ -6,7 +6,7 @@
  *  @Creation: 19-07-2018 17:51:16 UTC-5
  *
  *  @Last By:   Brendan Punsky
- *  @Last Time: 19-07-2018 18:26:06 UTC-5
+ *  @Last Time: 12-08-2018 23:44:53 UTC-5
  *  
  *  @Description:
  *  
@@ -48,7 +48,7 @@ peek :: inline proc(queue: ^Queue($T)) -> ^T {
     return peek_tail(queue);
 }
 
-pop :: inline proc(queue: ^Queue($T)) -> T {
+pop :: inline proc(queue: ^Queue($T)) -> ^T {
     return pop_tail(queue);
 }
 
@@ -70,7 +70,7 @@ push_head :: inline proc(queue: ^Queue($T), value: T, mode := Wrap_Mode.Wrap) ->
         return nil;
     }
 
-    tmp := queue.data + queue.head;
+    tmp := mem.ptr_offset(queue.data, queue.head);
 
     tmp^ = value;
     queue.head = (queue.head + 1) % queue.cap;
@@ -185,7 +185,7 @@ test_wrap :: proc() {
 
     fmt.println("testing Wrap_Mode.Wrap...");
 
-    for i in 0...8 do
+    for i in 0..8 do
         push(&queue, i, Wrap_Mode.Wrap);
 
     for queue.len != 0 do
@@ -198,7 +198,7 @@ test_silent :: proc() {
 
     fmt.println("testing Wrap_Mode.Silent...");
 
-    for i in 0...8 do
+    for i in 0..8 do
         push(&queue, i, Wrap_Mode.Silent);
 
     for queue.len != 0 do
@@ -211,7 +211,7 @@ test_assert :: proc() {
 
     fmt.println("testing Wrap_Mode.Assert...");
 
-    for i in 0...8 do
+    for i in 0..8 do
         push(&queue, i, Wrap_Mode.Assert);
 
     for queue.len != 0 do

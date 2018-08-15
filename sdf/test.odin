@@ -6,7 +6,7 @@
  *  @Creation: 13-02-2018 11:04:31 UTC-5
  *
  *  @Last By:   Brendan Punsky
- *  @Last Time: 11-08-2018 00:45:56 UTC-5
+ *  @Last Time: 13-08-2018 11:02:59 UTC-5
  *  
  *  @Description:
  *  
@@ -184,6 +184,7 @@ main :: proc() {
 
         dt :: 1.0/60.0*0.1;
         GRAVITY :: 60.0;
+        
         for k in 0..9 {
 
             // force calculations

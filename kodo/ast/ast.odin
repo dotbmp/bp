@@ -6,7 +6,7 @@
  *  @Creation: 01-06-2018 19:21:07 UTC-5
  *
  *  @Last By:   Brendan Punsky
- *  @Last Time: 09-08-2018 22:29:55 UTC-5
+ *  @Last Time: 15-08-2018 01:56:16 UTC-5
  *  
  *  @Description:
  *  
@@ -77,27 +77,33 @@ print_module :: proc(module : ^Module, indent := 0) {
 
 
 Block :: struct {
-    open     : ^Token,
-    close    : ^Token,
-    entities : map[string]^Entity,
-    stmts    : []Stmt,
+    open:  ^Token,
+    close: ^Token,
+
+    parent:   ^Block,
+    entities: map[string]^Entity,
+    stmts:    []Stmt,
 }
 
 Entity :: struct {
-    name : string,
+    status : Status,
+    name   : string,
+
     decl : Decl,
     typ  : Type,
     val  : Value,
 }
 
 Name :: struct {
-    tok   : ^Token,
-    block : ^Block,
+    tok: ^Token,
+    
+    block: ^Block,
 }
 
 Literal :: struct {
-    tok : ^Token,
-    val : Value,
+    tok: ^Token,
+    
+    val: Value,
 }
 
 Field :: struct {
@@ -122,19 +128,32 @@ using Status :: enum {
     Resolved,
 }
 
-add_entity :: proc(block : ^Block, name : string) -> ^Entity {
-    return nil; // @error(bpunsky)
+add_entity :: proc(block: ^Block, name: string) -> ^Entity {
+    if !has_entity(block, name) {
+        e := new(Entity);
+
+        block.entities[name] = e;
+
+        return e;
+    }
+
+    return nil;
 }
 
-get_entity :: proc(block : ^Block, name : string) -> ^Entity {
+get_entity :: proc(block: ^Block, name: string) -> ^Entity {
     if e, ok := block.entities[name]; ok {
         return e;
     }
     else {
-        //return get_entity(block.parent, name);
+        return get_entity(block.parent, name);
     }
 
     return nil;
+}
+
+has_entity :: inline proc(block: ^Block, name: string) -> bool {
+    _, ok := block.entities[name];
+    return ok;
 }
 
 
@@ -158,24 +177,27 @@ Stmt_Goto :: struct {
 }
 
 Stmt_If :: struct {
-    kwd  : ^Token,
-    cond : Expr,
-    then : ^Block,
-    els  : Stmt,
+    kwd: ^Token,
+    
+    cond: Expr,
+    then: ^Block,
+    els:  Stmt,
 }
 
 Stmt_For :: struct {
-    kwd   : ^Token,
-    decl  : Decl,
-    cond  : Expr,
-    iter  : Stmt,
-    block : ^Block,
+    kwd: ^Token,
+    
+    decl:  Decl,
+    cond:  Expr,
+    iter:  Stmt,
+    block: ^Block,
 }
 
 Stmt_Assn :: struct {
-    op  : ^Token,
-    lhs : []Expr,
-    rhs : []Expr,
+    op: ^Token,
+    
+    lhs: []Expr,
+    rhs: []Expr,
 }
 
 print_stmt :: proc(stmt : Stmt, indent := 0) {
@@ -237,37 +259,42 @@ Decl :: union {
 }
 
 Decl_Scope :: struct {
-    kwd   : ^Token,
-    name  : ^Name,
-    block : ^Block,
+    kwd: ^Token,
+
+    name:  ^Name,
+    block: ^Block,
 }
 
 Decl_Import :: struct {
-    kwd  : ^Token,
-    name : ^Name,
-    path : ^Token,
+    kwd: ^Token,
+    
+    name: ^Name,
+    path: ^Token,
 }
 
 Decl_Label :: struct {
-    kwd  : ^Token,
-    name : ^Name,   
+    kwd: ^Token,
+    
+    name: ^Name,   
 }
 
 Decl_Type :: struct {
-    kwd  : ^Token,
-    col  : ^Token,
-    name : ^Name,
-    typ  : Type,
+    kwd: ^Token,
+    col: ^Token,
+    
+    name: ^Name,
+    typ:  Type,
 }
 
 Decl_Var :: struct {
-    kwd   : ^Token,
-    alt   : ^Token, // @note(bpunsky): ???
-    col   : ^Token,
-    equ   : ^Token,
-    names : []^Name,
-    typ   : Type,
-    exprs : []Expr,
+    kwd: ^Token,
+    alt: ^Token, // @note(bpunsky): ???
+    col: ^Token,
+    equ: ^Token,
+
+    names: []^Name,
+    typ:   Type,
+    exprs: []Expr,
 }
 
 print_decl :: proc(decl : Decl, indent := 0) {
@@ -329,29 +356,33 @@ Type :: union {
 }
 
 Type_Struct :: struct {
-    kwd    : ^Token,
-    fields : []^Field,
+    kwd: ^Token,
+    
+    fields: []^Field,
 }
 
 Type_Enum :: struct {
-    kwd    : ^Token,
-    base   : Type,
-    fields : []^Field,
+    kwd: ^Token,
+
+    base:   Type,
+    fields: []^Field,
 }
 
 Type_Proc :: struct {
-    kwd     : ^Token,
-    params  : []^Field,
-    returns : []^Field,
+    kwd: ^Token,
+   
+    params:  []^Field,
+    returns: []^Field,
 }
 
 Type_Array :: struct {
-    open  : ^Token,
-    close : ^Token,
-    tok   : ^Token, // @todo(bpunsky): ???
-    arg   : Expr,
-    base  : Type,
-    len : int,
+    open:  ^Token,
+    close: ^Token,
+    tok:   ^Token, // @todo(bpunsky): ???
+    
+    arg:  Expr,
+    base: Type,
+    len:  i64,
 }
 
 Type_Ptr :: struct {
@@ -359,7 +390,7 @@ Type_Ptr :: struct {
     base : Type,
 }
 
-Basic :: enum {
+using Basic :: enum {
     Int,
     Int8,
     Int16,

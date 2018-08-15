@@ -1,0 +1,6 @@
+
+*.exe
+
+kodo/\.vs/main/v15/
+
+*.obj

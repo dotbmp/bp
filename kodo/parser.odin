@@ -6,7 +6,7 @@
  *  @Creation: 16-06-2018 04:00:18 UTC-5
  *
  *  @Last By:   Brendan Punsky
- *  @Last Time: 12-08-2018 22:10:22 UTC-5
+ *  @Last Time: 14-08-2018 18:46:37 UTC-5
  *  
  *  @Description:
  *  
@@ -34,15 +34,15 @@ Parser :: struct {
     error_num : int,
 }
 
-next_token :: proc(using parser : ^Parser) -> ^ast.Token {
+next_token :: inline proc(using parser : ^Parser) -> ^ast.Token {
     token = &tokens[index];
     index += 1;
     return token;
 }
 
-
-
-match :: proc[match_kind, match_text];
+match  :: proc[match_kind, match_text];
+allow  :: proc[allow_kind, allow_text];
+expect :: proc[expect_kind, expect_text];
 
 match_kind :: inline proc(using parser : ^Parser, kinds : ..ast.Token_Kind) -> bool {
     for kind in kinds {
@@ -64,10 +64,6 @@ match_text :: inline proc(using parser : ^Parser, texts : ..string) -> bool {
     return false;
 }
 
-
-
-allow :: proc[allow_kind, allow_text];
-
 allow_kind :: inline proc(using parser : ^Parser, kinds : ..ast.Token_Kind) -> ^ast.Token {
     for match(parser, ..kinds) {
         tok := token;
@@ -87,10 +83,6 @@ allow_text :: inline proc(using parser : ^Parser, texts : ..string) -> ^ast.Toke
 
     return nil;
 }
-
-
-
-expect :: proc[expect_kind, expect_text];
 
 expect_kind :: inline proc(using parser : ^Parser, kinds : ..ast.Token_Kind, loc := #caller_location) -> ^ast.Token {
     if tok := allow(parser, ..kinds); tok != nil {

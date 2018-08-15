@@ -6,7 +6,7 @@
  *  @Creation: 26-06-2018 15:44:00 UTC-5
  *
  *  @Last By:   Brendan Punsky
- *  @Last Time: 06-07-2018 09:52:53 UTC-5
+ *  @Last Time: 13-08-2018 10:44:45 UTC-5
  *  
  *  @Description:
  *  
@@ -18,7 +18,7 @@ import "core:fmt"
 
 
 
-Op :: enum u16 #export {
+using Op :: enum u16 {
     INVALID,
 
     QUIT,
@@ -82,8 +82,6 @@ Op :: enum u16 #export {
     ORI,
     XORI,
 
-    FCALL,
-
     // PSEUDOINSTRUCTIONS
 
     NOP,
@@ -98,7 +96,59 @@ Op :: enum u16 #export {
     POP,
 }
 
-Reg :: enum u16 #export {
+string_to_op :: proc(str: string) -> Reg {
+    switch str {
+    case "QUIT", "quit": QUIT;
+    case "BRK",  "brk":  BRK;
+    case "IHI",  "ihi":  IHI;
+    case "ILO",  "ilo":  ILO;
+    case "GOTO", "goto": GOTO;
+    case "JUMP", "jump": JUMP;
+    case "JEQ",  "jeq":  JEQ;
+    case "JNE",  "jne":  JNE;
+    case "JLT",  "jlt":  JLT;
+    case "JGE",  "jge":  JGE;
+    case "JLTU", "jltu": JLTU;
+    case "JGEU", "jgeu": JGEU;
+    case "SV8",  "sv8":  SV8;
+    case "SV16", "sv16": SV16;
+    case "SV32", "sv32": SV32;
+    case "SV64", "sv64": SV64;
+    case "LD8",  "ld8":  LD8;
+    case "LD16", "ld16": LD16;
+    case "LD32", "ld32": LD32;
+    case "LD64", "ld64": LD64;
+    case "ADD",  "add":  ADD;
+    case "ADDF", "addf": ADDF;
+    case "SUB",  "sub":  SUB;
+    case "SUBF", "subf": SUBF;
+    case "MUL",  "mul":  MUL;
+    case "MULU", "mulu": MULU;
+    case "MULF", "mulf": MULF;
+    case "DIV",  "div":  DIV;
+    case "DIVU", "divu": DIVU;
+    case "DIVF", "divf": DIVF;
+    case "MOD",  "mod":  MOD;
+    case "MODU", "modu": MODU;
+    case "SHL",  "shl":  SHL;
+    case "SHR",  "shr":  SHR;
+    case "SHA",  "sha":  SHA;
+    case "AND",  "and":  AND;
+    case "OR",   "or":   OR;
+    case "XOR",  "xor":  XOR;
+    case "ADDI", "addi": ADDI;
+    case "SHLI", "shli": SHLI;
+    case "SHRI", "shri": SHRI;
+    case "SHAI", "shai": SHAI;
+    case "ANDI", "andi": ANDI;
+    case "ORI",  "ori":  ORI;
+    case "XORI", "xori": XORI;
+    }
+
+    return INVALID;
+}
+
+using Reg :: enum u16 {
     x0,  x1,  x2,  x3,
     x4,  x5,  x6,  x7,
     x8,  x9,  x10, x11,
@@ -154,6 +204,79 @@ Reg :: enum u16 #export {
     t5 = x29,
     t6 = x30,
     t7 = x31,
+}
+
+string_to_reg :: proc(str: string) -> Reg {
+    switch str {
+    case "x0":  return x0;
+    case "x1":  return x1;
+    case "x2":  return x2;
+    case "x3":  return x3;
+    case "x4":  return x4;
+    case "x5":  return x5;
+    case "x6":  return x6;
+    case "x7":  return x7;
+    case "x8":  return x8;
+    case "x9":  return x9;
+    case "x10": return x10;
+    case "x11": return x11;
+    case "x12": return x12;
+    case "x13": return x13;
+    case "x14": return x14;
+    case "x15": return x15;
+    case "x16": return x16;
+    case "x17": return x17;
+    case "x18": return x18;
+    case "x19": return x19;
+    case "x20": return x20;
+    case "x21": return x21;
+    case "x22": return x22;
+    case "x23": return x23;
+    case "x24": return x24;
+    case "x25": return x25;
+    case "x26": return x26;
+    case "x27": return x27;
+    case "x28": return x28;
+    case "x29": return x29;
+    case "x30": return x30;
+    case "x31": return x31;
+
+    case "rz": return rz;
+    case "gp": return gp;
+    case "sp": return sp;
+    case "hp": return hp;
+    case "fp": return fp;
+    case "ra": return ra;
+    case "r0": return r0;
+    case "r1": return r1;
+    case "a0": return a0;
+    case "a1": return a1;
+    case "a2": return a2;
+    case "a3": return a3;
+    case "a4": return a4;
+    case "a5": return a5;
+    case "a6": return a6;
+    case "a7": return a7;
+    case "s0": return s0;
+    case "s1": return s1;
+    case "s2": return s2;
+    case "s3": return s3;
+    case "s4": return s4;
+    case "s5": return s5;
+    case "s6": return s6;
+    case "s7": return s7;
+    case "t0": return t0;
+    case "t1": return t1;
+    case "t2": return t2;
+    case "t3": return t3;
+    case "t4": return t4;
+    case "t5": return t5;
+    case "t6": return t6;
+    case "t7": return t7;
+    }
+
+    panic("Invalid register string."); // @todo(bpunsky): clean this up
+    return Reg(-1);
 }
 
 

@@ -1,10 +1,35 @@
-when ODIN_OS == "windows" do import w32 "core:sys/windows.odin";
+/*
+ *  @Name:     time
+ *  
+ *  @Author:   Brendan Punsky
+ *  @Email:    bpunsky@gmail.com
+ *  @Creation: 12-08-2018 17:25:15 UTC-5
+ *
+ *  @Last By:   Brendan Punsky
+ *  @Last Time: 12-08-2018 23:08:31 UTC-5
+ *  
+ *  @Description:
+ *  
+ */
 
-import "core:math.odin"
+package time
+
+import "core:math"
+import "core:os"
+
+when os.OS == "windows" {
+    import w32 "core:sys/win32"
+}
+
+
 
 ticks :: inline proc() -> u64 {
     ticks: u64;
-    when ODIN_OS == "windows" do w32.query_performance_counter(cast(^i64) &ticks);
+    
+    when os.OS == "windows" {
+        w32.query_performance_counter(cast(^i64) &ticks);
+    }
+
     return ticks;
 }
 
@@ -20,7 +45,9 @@ forfeit :: inline proc() do w32.sleep(0); // forfeits remaining time in OS times
 Duration :: distinct f64;
 
 sleep :: inline proc(d: Duration) {
-    when ODIN_OS == "windows" do w32.sleep(cast(i32)math.round(ms(d)));
+    when os.OS == "windows" {
+        w32.sleep(cast(i32)math.round(ms(d)));
+    }
 }
 
 years   :: proc[from_years,   duration_years,   to_years];
@@ -130,9 +157,14 @@ Timer :: struct {
 
 make_timer :: inline proc() -> Timer {
     timer: Timer;
-    when ODIN_OS == "windows" do w32.query_performance_frequency(cast(^i64) &timer.start_ticks);
+    
+    when os.OS == "windows" {
+        w32.query_performance_frequency(cast(^i64) &timer.start_ticks);
+    }
+
     timer.ms_frequency = cast(f64) timer.start_ticks;
     start(&timer);
+    
     return timer;
 }
 

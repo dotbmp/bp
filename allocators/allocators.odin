@@ -6,7 +6,7 @@
  *  @Creation: 28-11-2017 00:10:03 UTC-5
  *
  *  @Last By:   Brendan Punsky
- *  @Last Time: 09-08-2018 21:51:03 UTC-5
+ *  @Last Time: 12-08-2018 23:11:25 UTC-5
  *  
  *  @Description:
  *  
@@ -117,19 +117,22 @@ main :: proc() {
         num : int,
     }
 
-    // test : ^Test;
+    test : ^Test;
 
-    // arena := make_virtual_arena(150000);
+    arena := make_virtual_arena(150000);
 
-    // fmt.println(((^Virtual_Arena)(arena.data))^);
+    fmt.println(((^Virtual_Arena)(arena.data))^);
 
-    // context <- mem.context_from_allocator(arena) {
-    //     //defer free_all();
+    {
+        context = mem.context_from_allocator(arena);
+        //defer free_all();
 
-    //     test = new(Test);
-    // }
+        test = new(Test);
+    }
 
-    // fmt.println(test^);
+    fmt.println(test.num);
+    test.num = 10101;
+    fmt.println(test.num);
 
     j := cast(^int) virtual.alloc(200);
 

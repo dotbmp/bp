@@ -6,7 +6,7 @@
  *  @Creation: 13-02-2018 11:04:23 UTC-5
  *
  *  @Last By:   Brendan Punsky
- *  @Last Time: 10-08-2018 21:56:20 UTC-5
+ *  @Last Time: 13-08-2018 22:52:09 UTC-5
  *  
  *  @Description:
  *  
@@ -381,8 +381,8 @@ init :: proc() -> () {
     _program, _ = gl.load_shaders(VERTEX_SHADER, FRAGMENT_SHADER);
 
     when os.OS == "windows" {
-        _ftime = os.last_write_time_by_name(VERTEX_SHADER);
-        _vtime = os.last_write_time_by_name(FRAGMENT_SHADER);
+        _vtime = os.last_write_time_by_name(VERTEX_SHADER);
+        _ftime = os.last_write_time_by_name(FRAGMENT_SHADER);
     }
 }
 
@@ -399,13 +399,14 @@ draw :: proc(w, h : int) {
     }
 
     when os.OS == "windows" {
+    ftime := os.last_write_time_by_name(VERTEX_SHADER);
         _program, _ftime, _vtime, _ = gl.update_shader_if_changed(VERTEX_SHADER, FRAGMENT_SHADER, _program, _ftime, _vtime);
     }
 
     gl.UseProgram(_program);
 
-    gl.Uniform2f (gl.get_uniform_location(_program, "iResolution"), cast(f32) w, cast(f32) h);
-    gl.Uniform1ui(gl.get_uniform_location(_program, "iBufLen"),     cast(u32) len(commands));
+    gl.Uniform2f (gl.get_uniform_location(_program, "iResolution"), f32(w), f32(h));
+    gl.Uniform1ui(gl.get_uniform_location(_program, "iBufLen"),     u32(len(commands)));
 
     gl.DrawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
