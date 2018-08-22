@@ -4,3 +4,5 @@
 kodo/\.vs/main/v15/
 
 *.obj
+*.ll
+*.bc
