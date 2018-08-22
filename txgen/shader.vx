@@ -1,8 +1,10 @@
 #version 430 core
 
+uniform vec2 iResolution;
+
 out vec4 fragCoord;
 
 void main() {
-    fragCoord = vec4(2*vec2(gl_VertexID%2, gl_VertexID/2) - 1, 0.0, 1.0);
+    fragCoord = vec4(iResolution*vec2(gl_VertexID%2, gl_VertexID/2) - 1, 0.0, 1.0);
     gl_Position = fragCoord;
 }

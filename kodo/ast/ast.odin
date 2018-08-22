@@ -6,7 +6,7 @@
  *  @Creation: 01-06-2018 19:21:07 UTC-5
  *
  *  @Last By:   Brendan Punsky
- *  @Last Time: 15-08-2018 01:56:16 UTC-5
+ *  @Last Time: 16-08-2018 12:45:19 UTC-5
  *  
  *  @Description:
  *  
@@ -47,7 +47,7 @@ using Token_Kind :: enum {
     Symbol,
     Int,
     Float,
-    String,
+    Text,
     Bool,
 
     End,
@@ -83,35 +83,45 @@ Block :: struct {
     parent:   ^Block,
     entities: map[string]^Entity,
     stmts:    []Stmt,
+
+    status: Status,
 }
 
 Entity :: struct {
-    status : Status,
-    name   : string,
+    name: string,
 
-    decl : Decl,
-    typ  : Type,
-    val  : Value,
+    decl: Decl,
+    typ: Type,
+    val: Value,
+
+    status: Status,
 }
 
 Name :: struct {
-    tok: ^Token,
+    using tok: ^Token,
     
     block: ^Block,
+
+    status: Status,
 }
 
 Literal :: struct {
     tok: ^Token,
     
     val: Value,
+
+    status: Status,
 }
 
 Field :: struct {
-    col   : ^Token,
-    equ   : ^Token,
-    names : []^Name,
-    typ   : Type,
-    exprs : []Expr,
+    col: ^Token,
+    equ: ^Token,
+
+    names: []^Name,
+    typ:   Type,
+    exprs: []Expr,
+
+    status: Status,
 }
 
 Arg :: struct {
@@ -126,34 +136,6 @@ using Status :: enum {
     Unresolved,
     Resolving,
     Resolved,
-}
-
-add_entity :: proc(block: ^Block, name: string) -> ^Entity {
-    if !has_entity(block, name) {
-        e := new(Entity);
-
-        block.entities[name] = e;
-
-        return e;
-    }
-
-    return nil;
-}
-
-get_entity :: proc(block: ^Block, name: string) -> ^Entity {
-    if e, ok := block.entities[name]; ok {
-        return e;
-    }
-    else {
-        return get_entity(block.parent, name);
-    }
-
-    return nil;
-}
-
-has_entity :: inline proc(block: ^Block, name: string) -> bool {
-    _, ok := block.entities[name];
-    return ok;
 }
 
 
@@ -386,32 +368,35 @@ Type_Array :: struct {
 }
 
 Type_Ptr :: struct {
-    op   : ^Token,
-    base : Type,
+    op: ^Token,
+    
+    base: Type,
 }
 
 using Basic :: enum {
-    Int,
-    Int8,
-    Int16,
-    Int32,
+    Untyped_Int,
     Int64,
+    Int32,
+    Int16,
+    Int8,
 
-    Uint,
-    Uint8,
-    Uint16,
-    Uint32,
+    Untyped_Uint,
     Uint64,
+    Uint32,
+    Uint16,
+    Uint8,
 
-    Float32,
+    Untyped_Float,
     Float64,
+    Float32,
 
-    Bool,
-    Bool8,
-    Bool16,
-    Bool32,
+    Untyped_Bool,
     Bool64,
+    Bool32,
+    Bool16,
+    Bool8,
 
+    Untyped_String,
     String,
     Ztring,
 }
@@ -472,29 +457,30 @@ new_type_basic :: proc(basic : Basic) -> ^Type_Basic {
 
     using Basic;
     switch basic {
-    case Int:     typ.size = size_of(i32);
-    case Int8:    typ.size = size_of(i8);
-    case Int16:   typ.size = size_of(i16);
-    case Int32:   typ.size = size_of(i32);
-    case Int64:   typ.size = size_of(i64);
+    case Untyped_Int:  typ.size = size_of(i32);
+    case Int64:        typ.size = size_of(i64);
+    case Int32:        typ.size = size_of(i32);
+    case Int16:        typ.size = size_of(i16);
+    case Int8:         typ.size = size_of(i8);
     
-    case Uint:    typ.size = size_of(u64);
-    case Uint8:   typ.size = size_of(u8);
-    case Uint16:  typ.size = size_of(u16);
-    case Uint32:  typ.size = size_of(u32);
-    case Uint64:  typ.size = size_of(u64);
+    case Untyped_Uint: typ.size = size_of(u64);
+    case Uint64:       typ.size = size_of(u64);
+    case Uint32:       typ.size = size_of(u32);
+    case Uint16:       typ.size = size_of(u16);
+    case Uint8:        typ.size = size_of(u8);
     
-    case Float32: typ.size = size_of(f32);
-    case Float64: typ.size = size_of(f64);
-    
-    case Bool:    typ.size = size_of(b8);
-    case Bool8:   typ.size = size_of(b8);
-    case Bool16:  typ.size = size_of(b16);
-    case Bool32:  typ.size = size_of(b32);
-    case Bool64:  typ.size = size_of(b64);
+    case Untyped_Bool: typ.size = size_of(b8);
+    case Bool64:       typ.size = size_of(b64);
+    case Bool32:       typ.size = size_of(b32);
+    case Bool16:       typ.size = size_of(b16);
+    case Bool8:        typ.size = size_of(b8);
 
-    case String:  typ.size = size_of(^u8) * size_of(u64);
-    case Ztring:  typ.size = size_of(^u8);
+    case Float64:      typ.size = size_of(f64);
+    case Float32:      typ.size = size_of(f32);
+
+    case Untyped_String: typ.size = size_of(^u8) + size_of(i64);
+    case String:         typ.size = size_of(^u8) + size_of(i64);
+    case Ztring:         typ.size = size_of(^u8);
 
     case: panic();
     }
@@ -517,27 +503,31 @@ Expr :: union {
 }
 
 Expr_Binary :: struct {
-    op  : ^Token,
-    lhs : Expr,
-    rhs : Expr,
+    op: ^Token,
+    
+    lhs: Expr,
+    rhs: Expr,
 }
 
 Expr_Unary :: struct {
-    op  : ^Token,
-    exp : Expr,
+    op: ^Token,
+
+    exp: Expr,
 }
 
 Expr_Selector :: struct {
-    op  : ^Token,
-    lhs : Expr,
-    rhs : Expr,
+    op: ^Token,
+    
+    lhs: Expr,
+    rhs: Expr,
 }
 
 Expr_Subscript :: struct {
-    item  : Expr,
-    open  : ^Token,
-    arg   : Expr,
-    close : ^Token,
+    open:  ^Token,
+    close: ^Token,
+    
+    item: Expr,
+    arg:  Expr,
 }
 
 Expr_Call :: struct {

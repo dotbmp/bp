@@ -6,7 +6,7 @@
  *  @Creation: 28-11-2017 00:10:03 UTC-5
  *
  *  @Last By:   Brendan Punsky
- *  @Last Time: 13-08-2018 23:15:43 UTC-5
+ *  @Last Time: 20-08-2018 23:41:59 UTC-5
  *  
  *  @Description:
  *  
@@ -56,10 +56,15 @@ load :: proc(path: string, buf: []u32 = nil) -> (w, h: int, px: []u32) {
         defer delete(bytes);
 
         bmp := cast(^Header) &bytes[0];
-        if buf == nil do buf = make([]u32, bmp.width*bmp.height);
+        
+        if buf == nil {
+            buf = make([]u32, bmp.width*bmp.height);
+        }
+
+        pixels := mem.slice_ptr((^u32)(mem.ptr_offset(&bytes[0], int(bmp.offset))), int(bmp.width*bmp.height));
     
         for _, i in buf {
-            buf[i] = bits.byte_swap(mem.ptr_offset((^u32)(mem.ptr_offset((^u8)(bmp), int(bmp.offset))), i)^);
+            buf[i] = bits.byte_swap(pixels[i]);
         }
         
         return cast(int) bmp.width, cast(int) bmp.height, buf;
@@ -68,7 +73,7 @@ load :: proc(path: string, buf: []u32 = nil) -> (w, h: int, px: []u32) {
     return 0, 0, nil;
 }
 
-save :: proc(path: string, w, h: int, buf: []u32) -> bool {
+save :: proc(path: string, w, h: int, buf: []u32, compression := Bitfields) -> bool {
     if file, err := os.open(path, os.O_RDONLY | os.O_CREATE); err == os.ERROR_NONE {
         defer os.close(file);
 
@@ -81,7 +86,7 @@ save :: proc(path: string, w, h: int, buf: []u32) -> bool {
             height      = (i32)(h),
             planes      = 1,
             bits        = 32,
-            compression = RGB,
+            compression = compression,
             size        = (u32)(w*h),
         };
 
@@ -90,7 +95,9 @@ save :: proc(path: string, w, h: int, buf: []u32) -> bool {
         
         mem.copy(&tmp[0], &header, size_of(header));
 
-        for px, i in buf do mem.ptr_offset(cast(^u32) mem.ptr_offset(&tmp[0], size_of(header)), i)^ = bits.byte_swap(px);
+        for px, i in buf {
+            mem.ptr_offset(cast(^u32) mem.ptr_offset(&tmp[0], size_of(header)), i)^ = bits.byte_swap(px);
+        }
 
         os.write(file, tmp);
 

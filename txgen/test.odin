@@ -6,7 +6,7 @@
  *  @Creation: 13-08-2018 11:01:28 UTC-5
  *
  *  @Last By:   Brendan Punsky
- *  @Last Time: 14-08-2018 17:12:29 UTC-5
+ *  @Last Time: 21-08-2018 10:10:34 UTC-5
  *  
  *  @Description:
  *  
@@ -63,8 +63,8 @@ main :: proc() {
     buf := make([]u32, WIDTH * HEIGHT);
     defer delete(buf);
 
-    generate(FRAGMENT_SHADER, WIDTH, HEIGHT, mem.slice_to_bytes(buf[:]));
-    bmp.save(BITMAP, WIDTH, HEIGHT, buf[:]);
+    //generate(FRAGMENT_SHADER, WIDTH, HEIGHT, mem.slice_to_bytes(buf[:]));
+    //bmp.save(BITMAP, WIDTH, HEIGHT, buf[:]);
 
     program, ok := gl.load_shaders(VERTEX_SHADER, FRAGMENT_SHADER);
 
@@ -79,6 +79,22 @@ main :: proc() {
                 glfw.SetWindowShouldClose(window, true);
             }
 
+            cx, cy := glfw.GetCursorPos(window);
+
+            cx = ( cx) - (WIDTH  * 0.5);
+            cy = (-cy) + (HEIGHT * 0.5);
+
+            if glfw.GetKey(window, glfw.KEY_D) {
+                fmt.println(cx, cy);
+            }
+
+            if glfw.GetKey(window, glfw.KEY_S) {
+                // gl.ReadPixels(0, 0, WIDTH, HEIGHT, gl.RGBA, gl.UNSIGNED_BYTE, rawptr(uintptr(&buf[0])));
+                w, h, px := bmp.load("test1.bmp");
+                bmp.save(BITMAP, w, h, px);
+                //fmt.printf("Saved to \"%s\"\n", BITMAP);
+            }
+
             gl.Clear(gl.COLOR_BUFFER_BIT);
 
             program, ftime, vtime, _ = gl.update_shader_if_changed(VERTEX_SHADER, FRAGMENT_SHADER, program, ftime, vtime);
@@ -88,6 +104,7 @@ main :: proc() {
 
             gl.Uniform2f(gl.get_uniform_location(program, "iResolution"), WIDTH, HEIGHT);
             gl.Uniform1f(gl.get_uniform_location(program, "iTime"), f32(time));
+            gl.Uniform2f(gl.get_uniform_location(program, "iCursor"), f32(cx), f32(cy));
             gl.DrawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
             glfw.SwapBuffers(window);

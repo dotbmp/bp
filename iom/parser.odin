@@ -3,726 +3,1609 @@
  *  
  *  @Author:   Brendan Punsky
  *  @Email:    bpunsky@gmail.com
- *  @Creation: 21-06-2018 13:58:00 UTC-5
+ *  @Creation: 19-08-2018 12:41:53 UTC-5
  *
  *  @Last By:   Brendan Punsky
- *  @Last Time: 06-07-2018 09:58:47 UTC-5
+ *  @Last Time: 22-08-2018 14:08:08 UTC-5
  *  
  *  @Description:
  *  
  */
 
-package fiber
+package iom
 
+import "core:fmt"
 import "core:mem"
-import "core:os"
 import "core:strconv"
+
+import "bp:path"
+
+
+
+parser_error :: proc(using parser: ^Parser, format: string, args: ..any, loc := #caller_location) {
+    caller: string;
+
+    when false {
+        caller = fmt.aprintf("%s(%d:%d)", loc.file_path, loc.line, loc.column);
+        defer delete(caller);
+    }
+
+    message := fmt.aprintf(format, ..args);
+    defer delete(message);
+
+    full_path := path.full(file_name);
+    defer delete(full_path);
+
+    fmt.printf_err("%s(%d:%d) %s%s\n", full_path, token.lines, token.chars, message, caller);
+}
 
 
 
 Parser :: struct {
-    tokens : []Token,
-    token  : ^Token,
-    index  : int,
+    file_name: string,
 
-    error_num : int,
+    tokens: []Token,
+    token:  ^Token,
+    index:  int,
 
-    registers : [64]u64,
-
-    code : [dynamic]byte,
-    data : [dynamic]byte,
-
-    names : map[string]^Name,
-
-    line_byte_index : int,
-
-    stack_size : int,
-    memory_size : int,
-
-    relative : bool,
-
-    op : ^Token,
+    builder: Builder,
 }
 
-next_token :: proc(using parser : ^Parser) -> ^Token {
+next_token :: inline proc(using parser: ^Parser) -> ^Token {
     token = &tokens[index];
     index += 1;
+
     return token;
 }
 
-write_instr :: inline proc(using parser : ^Parser, instr : Instr) {
-    write_op(parser, encode(instr));
-}
-
-write_op :: inline proc(using parser : ^Parser, ops : ...u64) {
-    append(&code, ...mem.slice_to_bytes(ops));
-}
-
-
-
 match :: proc[match_kind, match_text];
 
-match_kind :: inline proc(using parser : ^Parser, kinds : ...Token_Kind) -> bool {
+match_kind :: inline proc(using parser: ^Parser, kinds: ..Token_Kind) -> ^Token {
     for kind in kinds {
-        if kind == token.kind {
-            return true;
+        if token.kind == kind {
+            return token;
         }
     }
 
-    return false;
+    return nil;
 }
 
-match_text :: inline proc(using parser : ^Parser, texts : ...string) -> bool {
+match_text :: inline proc(using parser: ^Parser, texts: ..string) -> ^Token {
     for text in texts {
-        if text == token.text {
-            return true;
+        if token.text == text {
+            return token;
         }
     }
 
-    return false;
+    return nil;
 }
-
-
 
 allow :: proc[allow_kind, allow_text];
 
-allow_kind :: inline proc(using parser : ^Parser, kinds : ...Token_Kind) -> ^Token {
-    for match(parser, ...kinds) {
-        tok := token;
-        next_token(parser);
-        return tok;
+allow_kind :: inline proc(using parser: ^Parser, kinds: ..Token_Kind) -> ^Token {
+    for kind in kinds {
+        if token.kind == kind {
+            tok := token;
+            next_token(parser);
+            return tok;
+        }
     }
 
     return nil;
 }
 
-allow_text :: inline proc(using parser : ^Parser, texts : ...string) -> ^Token {
-    for match(parser, ...texts) {
-        tok := token;
-        next_token(parser);
-        return tok;
+allow_text :: inline proc(using parser: ^Parser, texts: ..string) -> ^Token {
+    for text in texts {
+        if token.text == text {
+            tok := token;
+            next_token(parser);
+            return tok;
+        }
     }
 
     return nil;
 }
-
-
 
 expect :: proc[expect_kind, expect_text];
 
-expect_kind :: inline proc(using parser : ^Parser, kinds : ...Token_Kind, loc := #caller_location) -> ^Token {
-    if tok := allow(parser, ...kinds); tok != nil {
+expect_kind :: inline proc(using parser: ^Parser, kinds: ..Token_Kind) -> ^Token {
+    if tok := allow_kind(parser, ..kinds); tok != nil {
         return tok;
     }
-
-    error(cursor=token.cursor, format="Expected %v; got %v", args=[]any{kinds, token.kind}, loc=loc);
-    error_num += 1;
+    else {  
+        parser_error(parser, "Expected %v; got %v", kinds, tok.kind);
+    }
 
     return nil;
 }
 
-expect_text :: inline proc(using parser : ^Parser, texts : ...string, loc := #caller_location) -> ^Token {
-    if tok := allow(parser, ...texts); tok != nil {
+expect_text :: inline proc(using parser: ^Parser, texts: ..string) -> ^Token {
+    if tok := allow_text(parser, ..texts); tok != nil {
         return tok;
     }
-
-    error(cursor=token.cursor, format="Expected %v; got %v", args=[]any{texts, token.text}, loc=loc);
-    error_num += 1;
+    else {  
+        parser_error(parser, "Expected %v; got %v", texts, tok.text);
+    }
 
     return nil;
 }
 
-
-
-Name :: struct {
-    kind : Token_Kind,
-
-    name  : string,
-    value : i64,
-
-    usages : [dynamic]Usage,
-}
-
-Usage :: struct {
-    index    : u64,
-    relative : bool,
-}
-
-new_name :: inline proc(using parser : ^Parser, name : string, kind := Invalid) -> ^Name {
-    if n, ok := names[name]; ok {
-        if kind != Invalid {
-            if n.kind != Invalid {
-                error(token.cursor, "Name already declared: \"%s\"", name);
-
-                return nil;
-            }
-            else {
-                n.kind  = kind;
-                n.value = i64(len(code));
-            }
-        }
-        else {
-            append(&n.usages, Usage{u64(line_byte_index), relative});
-        }
-
-        return n;
-    }
-    else {
-        n := new(Name);
-
-        n.kind = kind;
-        n.name = name;
-
-        if kind == Invalid {
-            append(&n.usages, Usage{u64(line_byte_index), relative});
-        }
-        else {
-            n.value = i64(len(code));
-        }
-
-        names[name] = n;
-
-        return n;
+consume_whitespace :: inline proc(using parser: ^Parser) {
+    for token.kind == Newline || token.kind == Comment {
+        next_token(parser);
     }
 }
 
 
 
-parse_register :: inline proc(using parser : ^Parser) -> Reg {
-    if token := expect(parser, Register); token != nil {
-        switch token.kind {
-        case Register:
+parse_string :: proc(source: string) -> (Builder, bool) {
+    parser: Parser;
+
+    if tokens := lex_string(source); tokens != nil {
+        defer delete(tokens);
+
+        parser.tokens = tokens;
+
+        next_token(&parser);
+
+        consume_whitespace(&parser);
+
+        for parser.token.kind != End {
+            if !parse_line(&parser) {
+                return Builder{}, false;
+            }
+
+            consume_whitespace(&parser);
+        }
+
+        return parser.builder, true;
+    }
+
+    return Builder{}, false;
+}
+
+parse_file :: proc(file_name: string) -> (Builder, bool) {
+    parser: Parser;
+
+
+    if tokens := lex_file(file_name); tokens != nil {
+        defer delete(tokens);
+
+        parser.file_name = file_name;
+        parser.tokens    = tokens;
+
+        next_token(&parser);
+
+        consume_whitespace(&parser);
+
+        for parser.token.kind != End {
+            if !parse_line(&parser) {
+                return Builder{}, false;
+            }
+
+            consume_whitespace(&parser);
+        }
+
+        return parser.builder, true;
+    }
+
+    return Builder{}, false;
+}
+
+parse_line :: inline proc(using parser: ^Parser) -> bool {
+    switch token.kind {
+    case Op_Name:
+        if parse_instr(parser) {
+            return true;
+        }
+    
+    case Ref_Name:
+        token := token;
+
+        next_token(parser);
+
+        if expect(parser, ":") != nil {
+            add_label(&builder, token.text);
+
+            return true;
+        }
+
+    case String:
+        add_bytes(&builder, ([]byte)(token.text[1:len(token.text)-1]));
+        next_token(parser);
+        return true;
+
+    case Type_Name:
+        token := token;
+        next_token(parser);
+
+        switch token.text {
+        case "i64", "i32", "i16", "i8":
+            if im, ok := parse_int(parser); ok {
+                switch token.text {
+                case "i64":
+                    value := i64(im);
+                    add_bytes(&builder, mem.ptr_to_bytes(&value));
+                case "i32":
+                    value := i32(im);
+                    add_bytes(&builder, mem.ptr_to_bytes(&value));
+                case "i16":
+                    value := i16(im);
+                    add_bytes(&builder, mem.ptr_to_bytes(&value));
+                case "i8":
+                    value := i8(im);
+                    add_bytes(&builder, mem.ptr_to_bytes(&value));
+                }
+
+                return true;
+            }
+
+        case "u64", "u32", "u16", "u8":
+            if im, ok := parse_uint(parser); ok {
+                switch token.text {
+                case "u64":
+                    value := u64(im);
+                    add_bytes(&builder, mem.ptr_to_bytes(&value));
+
+                case "u32":
+                    value := u32(im);
+                    add_bytes(&builder, mem.ptr_to_bytes(&value));
+
+                case "u16":
+                    value := u16(im);
+                    add_bytes(&builder, mem.ptr_to_bytes(&value));
+
+                case "u8":
+                    value := u8(im);
+                    add_bytes(&builder, mem.ptr_to_bytes(&value));
+                }
+
+                return true;
+            }
+
+        case "f64", "f32":
+            if im, ok := parse_float(parser); ok {
+                switch token.text {
+                case "f64":
+                    value := f64(im);
+                    add_bytes(&builder, mem.ptr_to_bytes(&value));
+                
+                case "f32":
+                    value := f32(im);
+                    add_bytes(&builder, mem.ptr_to_bytes(&value));
+                }
+
+                return true;
+            }
+        }
+
+    case Uint:
+        token := token;
+
+        next_token(parser);
+
+        if expect(parser, ":") != nil {
+            add_anon(&builder, token.text);
+
+            return true;
+        }
+
+    case Symbol:
+        switch token.text {
+        case "@":
+            next_token(parser);
+
             switch token.text {
-            case "x0":  return x0;
-            case "x1":  return x1;
-            case "x2":  return x2;
-            case "x3":  return x3;
-            case "x4":  return x4;
-            case "x5":  return x5;
-            case "x6":  return x6;
-            case "x7":  return x7;
-            case "x8":  return x8;
-            case "x9":  return x9;
-            case "x10": return x10;
-            case "x11": return x11;
-            case "x12": return x12;
-            case "x13": return x13;
-            case "x14": return x14;
-            case "x15": return x15;
-            case "x16": return x16;
-            case "x17": return x17;
-            case "x18": return x18;
-            case "x19": return x19;
-            case "x20": return x20;
-            case "x21": return x21;
-            case "x22": return x22;
-            case "x23": return x23;
-            case "x24": return x24;
-            case "x25": return x25;
-            case "x26": return x26;
-            case "x27": return x27;
-            case "x28": return x28;
-            case "x29": return x29;
-            case "x30": return x30;
-            case "x31": return x31;
-            case "x32": return x32;
-            case "x33": return x33;
-            case "x34": return x34;
-            case "x35": return x35;
-            case "x36": return x36;
-            case "x37": return x37;
-            case "x38": return x38;
-            case "x39": return x39;
-            case "x40": return x40;
-            case "x41": return x41;
-            case "x42": return x42;
-            case "x43": return x43;
-            case "x44": return x44;
-            case "x45": return x45;
-            case "x46": return x46;
-            case "x47": return x47;
-            case "x48": return x48;
-            case "x49": return x49;
-            case "x50": return x50;
-            case "x51": return x51;
-            case "x52": return x52;
-            case "x53": return x53;
-            case "x54": return x54;
-            case "x55": return x55;
-            case "x56": return x56;
-            case "x57": return x57;
-            case "x58": return x58;
-            case "x59": return x59;
-            case "x60": return x60;
-            case "x61": return x61;
-            case "x62": return x62;
-            case "x63": return x63;
+            case "spawn":
+                next_token(parser);
 
-            case "rz": return rz;
-            case "gp": return gp;
-            case "sp": return sp;
-            case "hp": return hp;
-            case "fp": return fp;
-            case "ra": return ra;
-            case "r0": return r0;
-            case "r1": return r1;
-            case "a0": return a0;
-            case "a1": return a1;
-            case "a2": return a2;
-            case "a3": return a3;
-            case "a4": return a4;
-            case "a5": return a5;
-            case "a6": return a6;
-            case "a7": return a7;
-            case "s0": return s0;
-            case "s1": return s1;
-            case "s2": return s2;
-            case "s3": return s3;
-            case "s4": return s4;
-            case "s5": return s5;
-            case "s6": return s6;
-            case "s7": return s7;
-            case "t0": return t0;
-            case "t1": return t1;
-            case "t2": return t2;
-            case "t3": return t3;
-            case "t4": return t4;
-            case "t5": return t5;
-            case "t6": return t6;
-            case "t7": return t7;
-            }
-        }
-    }
+                if token := expect(parser, Ref_Name); token != nil {
+                    add_spawn(&builder, token.text);
 
-    return 0;
-}
-
-parse_immediate :: inline proc(using parser : ^Parser) -> i64 {
-    if token.kind == Ident {
-        if ident := parse_ident(parser, Signed, Unsigned, Float); ident != nil {
-            return ident.value;
-        }
-    }
-    else {
-        if token := expect(parser, Signed, Unsigned, Float); token != nil {
-            switch token.kind {
-            case Signed, Unsigned, Float:
-                switch token.kind {
-                case Signed:   return transmute(i64) (strconv.parse_i64(token.text));
-                case Unsigned: return transmute(i64) (strconv.parse_u64(token.text));
-                case Float:    return transmute(i64) (strconv.parse_f64(token.text));
+                    return true;
                 }
             }
+
+            parser_error(parser, "Expected a directive.");
         }
     }
 
-    return 0;
+    parser_error(parser, "Something bad happened!"); // @todo(bpunsky): cmon dude fix this up
+    return false;
 }
 
-parse_label :: inline proc(using parser : ^Parser) -> ^Name {
-    if label := expect(parser, Label); label != nil {
-        name := new_name(parser, label.text[..len(label.text)-1], label.kind);
+parse_instr :: inline proc(using parser: ^Parser) -> bool {
+    using instr: Instr;
 
-        return name;
-    }
+    if op := expect(parser, Op_Name); op != nil {
+        switch op.text {
+        case "panic":
+            panic(); // @error
+            return false;
 
-    return nil;
-}
+        case "nop":
+            build(&builder, nop());
+            return true;
 
-/*
-parse_const :: inline proc(using parser : ^Parser) -> ^Name {
-    if cnst := expect(parser, Const); cnst != nil {
-        if imm, ok := parse_immediate(parser); ok {
-            if name := new_name(parser, cnst.text[1..], cnst.kind); name != nil {
-                name.value = imm;
-            
-                return name;
+        case "halt":
+            build(&builder, halt());
+            return true;
+
+        case "sv64":
+            if rd, im, ok := parse_reg_offset(parser); ok {
+                allow(parser, ",");
+
+                if rs, ok := parse_reg(parser); ok {
+                    build(&builder, sv64(rd, im, rs));
+                    return true;
+                }
             }
-        }
-    }
 
-    return nil;
-}
-*/
+        case "sv32":
+            if rd, im, ok := parse_reg_offset(parser); ok {
+                allow(parser, ",");
 
-parse_ident :: inline proc(using parser : ^Parser, kinds : ...Token_Kind) -> ^Name {
-    if ident := expect(parser, Ident); ident != nil {
-        if name := new_name(parser, ident.text); name != nil {
-            if kinds != nil {
-                for kind in kinds {
-                    if name.kind == kind {
-                        return name;
+                if rs, ok := parse_reg(parser); ok {
+                    build(&builder, sv32(rd, im, rs));
+                    return true;
+                }
+            }
+
+        case "sv16":
+            if rd, im, ok := parse_reg_offset(parser); ok {
+                allow(parser, ",");
+
+                if rs, ok := parse_reg(parser); ok {
+                    build(&builder, sv16(rd, im, rs));
+                    return true;
+                }
+            }
+
+        case "sv8":
+            if rd, im, ok := parse_reg_offset(parser); ok {
+                allow(parser, ",");
+
+                if rs, ok := parse_reg(parser); ok {
+                    build(&builder, sv8(rd, im, rs));
+                    return true;
+                }
+            }
+
+        case "ld64":
+            if rd, ok := parse_reg(parser); ok {
+                allow(parser, ",");
+
+                if rs, im, ok := parse_reg_offset(parser); ok {
+                    build(&builder, ld64(rd, rs, im));
+                    return true;
+                }
+            }
+
+        case "ld32":
+            if rd, ok := parse_reg(parser); ok {
+                allow(parser, ",");
+
+                if rs, im, ok := parse_reg_offset(parser); ok {
+                    build(&builder, ld32(rd, rs, im));
+                    return true;
+                }
+            }
+
+        case "ld16":
+            if rd, ok := parse_reg(parser); ok {
+                allow(parser, ",");
+
+                if rs, im, ok := parse_reg_offset(parser); ok {
+                    build(&builder, ld16(rd, rs, im));
+                    return true;
+                }
+            }
+
+        case "ld8":
+            if rd, ok := parse_reg(parser); ok {
+                allow(parser, ",");
+
+                if rs, im, ok := parse_reg_offset(parser); ok {
+                    build(&builder, ld8(rd, rs, im));
+                    return true;
+                }
+            }
+
+        case "sys":
+            if im, ok := parse_uint(parser); ok {
+                build(&builder, sys(im));
+                return true;
+            }
+
+        case "goto":
+            if rd, ok := parse_reg(parser); ok {
+                allow(parser, ",");
+
+                if match(parser, Reg_Name) != nil {
+                    if rs, ok := parse_reg(parser); ok {
+                        build(&builder, goto(rd, rs));
+                        return true;
+                    }
+                }
+                else {
+                    build(&builder, goto(rd));
+                    return true;
+                }
+            }
+
+        case "jump":
+            if match(parser, Reg_Name) != nil {
+                if rd, ok := parse_reg(parser); ok {
+                    allow(parser, ",");
+
+                    if ref, ok := parse_ref(parser, true); ok {
+                        build(&builder, jump(rd, ref));
+                        return true;
                     }
                 }
             }
             else {
-                return name;
-            }
-        }
-    }
-
-    return nil;
-}
-
-parse_breakpoint :: inline proc(using parser : ^Parser) -> bool {
-    if expect(parser, Breakpoint) != nil {
-        return true;
-    }
-
-    return false;
-}
-
-
-
-parse_instr :: inline proc(using parser : ^Parser) {
-    op = expect(parser, Opname);
-
-    if op == nil {
-        return;
-    }
-
-    switch op.text {
-    case "quit": write_op(parser, quit());
-    case "brk":  write_op(parser, brk());
-
-    case "ihi", "ilo", "addi":
-        rd := parse_register(parser);
-        expect(parser, ",");
-        im := parse_immediate(parser);
-
-        switch op.text {
-        case "ihi":  write_op(parser, ihi(rd, im));
-        case "ilo":  write_op(parser, ilo(rd, im));
-        case "addi": write_op(parser, addi(rd, i32(im)));
-        }
-
-    case "goto":
-        rd := parse_register(parser);
-
-        if allow(parser, ",") != nil {
-            switch token.kind {
-            case Register:
-                rs := parse_register(parser);
-                expect(parser, ",");
-                im := parse_immediate(parser);
-
-                write_op(parser, goto(rd, rs, i16(im)));
-
-            case Signed, Ident:
-                im := parse_immediate(parser);
-
-                write_op(parser, goto(rd, i16(im)));
-
-            case: expect(parser, Register, Signed);
-            }
-        }
-        else {
-            write_op(parser, goto(rd));
-        }
-
-    case "jump":
-        switch token.kind {
-        case Register:
-            rd := parse_register(parser);
-            expect(parser, ",");
-            im := parse_immediate(parser);
-
-            write_op(parser, jump(rd, i32(im)));
-
-        case Signed, Ident:
-            im := parse_immediate(parser);
-
-            write_op(parser, jump(i32(im)));
-
-        case: expect(parser, Register, Signed);
-        }
-
-    case "ld8", "ld16", "ld32", "ld64":
-        rd := parse_register(parser);
-        expect(parser, ",");
-
-        if allow(parser, "[") != nil {
-            rs := parse_register(parser);
-            expect(parser, ",");
-            im := parse_immediate(parser);
-            expect(parser, "]");
-
-            switch op.text {
-            case "ld8":  write_op(parser, ld8 (rd, rs, i16(im)));
-            case "ld16": write_op(parser, ld16(rd, rs, i16(im)));
-            case "ld32": write_op(parser, ld32(rd, rs, i16(im)));
-            case "ld64": write_op(parser, ld64(rd, rs, i16(im)));
-            }
-        }
-        else {
-            rs := parse_register(parser);
-
-            switch op.text {
-            case "ld8":  write_op(parser, ld8 (rd, rs));
-            case "ld16": write_op(parser, ld16(rd, rs));
-            case "ld32": write_op(parser, ld32(rd, rs));
-            case "ld64": write_op(parser, ld64(rd, rs));
-            }
-        }
-
-    case "sv8", "sv16", "sv32", "sv64":
-        if allow(parser, "[") != nil {
-            rd := parse_register(parser);
-            expect(parser, ",");
-            im := parse_immediate(parser);
-            expect(parser, "]");
-            expect(parser, ",");
-            rs := parse_register(parser);
-
-            switch op.text {
-            case "sv8":  write_op(parser, sv8 (rd, i16(im), rs));
-            case "sv16": write_op(parser, sv16(rd, i16(im), rs));
-            case "sv32": write_op(parser, sv32(rd, i16(im), rs));
-            case "sv64": write_op(parser, sv64(rd, i16(im), rs));
-            }
-        }
-        else {
-            rd := parse_register(parser);
-            expect(parser, ",");
-            rs := parse_register(parser);
-
-            switch op.text {
-            case "sv8":  write_op(parser, sv8 (rd, rs));
-            case "sv16": write_op(parser, sv16(rd, rs));
-            case "sv32": write_op(parser, sv32(rd, rs));
-            case "sv64": write_op(parser, sv64(rd, rs));
-            }
-        }
-
-    case "add", "sub", "mul", "div", "mod", "mulu", "divu", "modu", "addf", "subf", "mulf", "divf", "shl", "shr", "sha", "and", "or", "xor":
-        rd := parse_register(parser);
-        expect(parser, ",");
-        rs1 := parse_register(parser);
-
-        if allow(parser, ",") != nil {
-            rs2 := parse_register(parser);
-            
-            switch op.text {
-            case "add":  write_op(parser, add (rd, rs1, rs2));
-            case "sub":  write_op(parser, sub (rd, rs1, rs2));
-            case "mul":  write_op(parser, mul (rd, rs1, rs2));
-            case "div":  write_op(parser, div (rd, rs1, rs2));
-            case "mod":  write_op(parser, mod (rd, rs1, rs2));
-            case "mulu": write_op(parser, mulu(rd, rs1, rs2));
-            case "divu": write_op(parser, divu(rd, rs1, rs2));
-            case "modu": write_op(parser, modu(rd, rs1, rs2));
-            case "addf": write_op(parser, addf(rd, rs1, rs2));
-            case "subf": write_op(parser, subf(rd, rs1, rs2));
-            case "mulf": write_op(parser, mulf(rd, rs1, rs2));
-            case "divf": write_op(parser, divf(rd, rs1, rs2));
-            case "shl":  write_op(parser, shl (rd, rs1, rs2));
-            case "shr":  write_op(parser, shr (rd, rs1, rs2));
-            case "sha":  write_op(parser, sha (rd, rs1, rs2));
-            case "and":  write_op(parser, and (rd, rs1, rs2));
-            case "or":   write_op(parser, or  (rd, rs1, rs2));
-            case "xor":  write_op(parser, xor (rd, rs1, rs2));
-            }
-        }
-        else {
-            switch op.text {
-            case "add":  write_op(parser, add (rd, rs1));
-            case "sub":  write_op(parser, sub (rd, rs1));
-            case "mul":  write_op(parser, mul (rd, rs1));
-            case "div":  write_op(parser, div (rd, rs1));
-            case "mod":  write_op(parser, mod (rd, rs1));
-            case "mulu": write_op(parser, mulu(rd, rs1));
-            case "divu": write_op(parser, divu(rd, rs1));
-            case "modu": write_op(parser, modu(rd, rs1));
-            case "addf": write_op(parser, addf(rd, rs1));
-            case "subf": write_op(parser, subf(rd, rs1));
-            case "mulf": write_op(parser, mulf(rd, rs1));
-            case "divf": write_op(parser, divf(rd, rs1));
-            case "shl":  write_op(parser, shl (rd, rs1));
-            case "shr":  write_op(parser, shr (rd, rs1));
-            case "sha":  write_op(parser, sha (rd, rs1));
-            case "and":  write_op(parser, and (rd, rs1));
-            case "or":   write_op(parser, or  (rd, rs1));
-            case "xor":  write_op(parser, xor (rd, rs1));
-            }
-        }
-
-    case "jeq", "jne", "jlt", "jge", "jltu", "jgeu":
-        rs1 := parse_register(parser);
-        expect(parser, ",");
-        rs2 := parse_register(parser);
-        expect(parser, ",");
-        im := parse_immediate(parser);
-
-        switch op.text {
-        case "jeq":  write_op(parser, jeq (rs1, rs2, i16(im)));
-        case "jne":  write_op(parser, jne (rs1, rs2, i16(im)));
-        case "jlt":  write_op(parser, jlt (rs1, rs2, i16(im)));
-        case "jge":  write_op(parser, jge (rs1, rs2, i16(im)));
-        case "jltu": write_op(parser, jltu(rs1, rs2, i16(im)));
-        case "jgeu": write_op(parser, jgeu(rs1, rs2, i16(im)));
-        }
-
-    case "shli", "shri", "shai", "andi", "ori", "xori":
-        rd := parse_register(parser);
-        expect(parser, ",");
-        rs := parse_register(parser);
-        expect(parser, ",");
-        im := parse_immediate(parser);
-
-        switch op.text {
-        case "shli": write_op(parser, shli(rd, rs, i16(im)));
-        case "shri": write_op(parser, shri(rd, rs, i16(im)));
-        case "shai": write_op(parser, shai(rd, rs, i16(im)));
-        case "andi": write_op(parser, andi(rd, rs, i16(im)));
-        case "ori":  write_op(parser, ori (rd, rs, i16(im)));
-        case "xori": write_op(parser, xori(rd, rs, i16(im)));
-        }
-
-    case "nop": write_op(parser, nop());
-
-    case "mov":
-        rd := parse_register(parser);
-        expect(parser, ",");
-
-        if next := expect(parser, Register, Signed, Unsigned, Float); next != nil {
-            switch next.kind {
-            case Register:
-                rs := parse_register(parser);
-
-                write_op(parser, mov(rd, rs));
-
-            case Signed, Unsigned, Float:
-                im := parse_immediate(parser);
-
-                write_op(parser, mov(rd, im));
-            }
-        }
-
-    case "call", "tail":
-        im := parse_immediate(parser);
-
-        switch op.text {
-        case "call": write_op(parser, call(im));
-        case "tail": write_op(parser, tail(im));
-        }
-
-    case "ret": write_op(parser, ret());
-
-    case "push":
-        switch token.kind {
-        case Register:
-            rs := parse_register(parser);
-
-            write_op(parser, push(rs));
-
-        case Signed, Unsigned, Float, Ident:
-            im := parse_immediate(parser);
-
-            write_op(parser, push(im));
-
-        case: expect(parser, Register, Signed, Unsigned, Float, Ident);
-        }
-
-    case "pop":
-        rd := parse_register(parser);
-
-        write_op(parser, pop(rd));
-
-    case:
-        error(parser.token, "Invalid instruction.");
-    }
-}
-
-parse_line :: proc(using parser : ^Parser) -> bool {
-    line_byte_index = len(code);
-
-    if token.kind == Breakpoint {
-        if parse_breakpoint(parser) {
-            write_instr(parser, Instr{op=BRK});
-        }
-    }
-
-    switch token.kind {
-    /*
-    case Const:
-        parse_const(parser);
-
-        return true;
-    */
-
-    case Opname:
-        parse_instr(parser);
-
-        return true;
-
-    case Label:
-        parse_label(parser);
-
-        return true;
-
-    case End:
-        break;
-
-    case:
-        error(token.cursor, "Error: expected a constant declaration, label or instruction");
-    }
-
-    return false;
-}
-
-
-
-parse_text :: proc(source : string) -> (Bytecode, bool) {
-    parser : Parser;
-    parser.tokens = lex(source);
-
-    next_token(&parser);
-
-    for {
-        if end := allow(&parser, Newline); end != nil {
-            for {
-                if allow(&parser, Newline) == nil {
-                    break;
+                if ref, ok := parse_ref(parser, true); ok {
+                    build(&builder, jump(ref));
+                    return true;
                 }
             }
-        }
-        
-        if !parse_line(&parser) {
-            break;
-        }
-    }
 
-    for _, name in parser.names {
-        if name.kind == Label {
-            for usage in name.usages {
-                instr := decode((^u64)(&parser.code[usage.index])^);
+        case "jeq":
+            if rs1, ok := parse_reg(parser); ok {
+                allow(parser, ",");
 
-                if usage.relative {
-                    instr.im = name.value - i64(usage.index);
+                if rs2, ok := parse_reg(parser); ok {
+                    allow(parser, ",");
+
+                    if ref, ok := parse_ref(parser, true); ok {
+                        build(&builder, jeq(rs1, rs2, ref));
+                        return true;
+                    }
+                }
+            }
+
+        case "jne":
+            if rs1, ok := parse_reg(parser); ok {
+                allow(parser, ",");
+
+                if rs2, ok := parse_reg(parser); ok {
+                    allow(parser, ",");
+
+                    if ref, ok := parse_ref(parser, true); ok {
+                        build(&builder, jne(rs1, rs2, ref));
+                        return true;
+                    }
+                }
+            }
+
+        case "jlt":
+            if rs1, ok := parse_reg(parser); ok {
+                allow(parser, ",");
+
+                if rs2, ok := parse_reg(parser); ok {
+                    allow(parser, ",");
+
+                    if ref, ok := parse_ref(parser, true); ok {
+                        build(&builder, jlt(rs1, rs2, ref));
+                        return true;
+                    }
+                }
+            }
+
+        case "jge":
+            if rs1, ok := parse_reg(parser); ok {
+                allow(parser, ",");
+
+                if rs2, ok := parse_reg(parser); ok {
+                    allow(parser, ",");
+
+                    if ref, ok := parse_ref(parser, true); ok {
+                        build(&builder, jge(rs1, rs2, ref));
+                        return true;
+                    }
+                }
+            }
+
+        case "jltu":
+            if rs1, ok := parse_reg(parser); ok {
+                allow(parser, ",");
+
+                if rs2, ok := parse_reg(parser); ok {
+                    allow(parser, ",");
+
+                    if ref, ok := parse_ref(parser, true); ok {
+                        build(&builder, jltu(rs1, rs2, ref));
+                        return true;
+                    }
+                }
+            }
+
+        case "jgeu":
+            if rs1, ok := parse_reg(parser); ok {
+                allow(parser, ",");
+
+                if rs2, ok := parse_reg(parser); ok {
+                    allow(parser, ",");
+
+                    if ref, ok := parse_ref(parser, true); ok {
+                        build(&builder, jgeu(rs1, rs2, ref));
+                        return true;
+                    }
+                }
+            }
+
+        case "jgt":
+            if rs1, ok := parse_reg(parser); ok {
+                allow(parser, ",");
+
+                if rs2, ok := parse_reg(parser); ok {
+                    allow(parser, ",");
+
+                    if ref, ok := parse_ref(parser, true); ok {
+                        build(&builder, jgt(rs1, rs2, ref));
+                        return true;
+                    }
+                }
+            }
+
+        case "jle":
+            if rs1, ok := parse_reg(parser); ok {
+                allow(parser, ",");
+
+                if rs2, ok := parse_reg(parser); ok {
+                    allow(parser, ",");
+
+                    if ref, ok := parse_ref(parser, true); ok {
+                        build(&builder, jle(rs1, rs2, ref));
+                        return true;
+                    }
+                }
+            }
+
+        case "jgtu":
+            if rs1, ok := parse_reg(parser); ok {
+                allow(parser, ",");
+
+                if rs2, ok := parse_reg(parser); ok {
+                    allow(parser, ",");
+
+                    if ref, ok := parse_ref(parser, true); ok {
+                        build(&builder, jgtu(rs1, rs2, ref));
+                        return true;
+                    }
+                }
+            }
+
+        case "jleu":
+            if rs1, ok := parse_reg(parser); ok {
+                allow(parser, ",");
+
+                if rs2, ok := parse_reg(parser); ok {
+                    allow(parser, ",");
+
+                    if ref, ok := parse_ref(parser, true); ok {
+                        build(&builder, jleu(rs1, rs2, ref));
+                        return true;
+                    }
+                }
+            }
+
+        case "jez":
+            if rs, ok := parse_reg(parser); ok {
+                allow(parser, ",");
+
+                if ref, ok := parse_ref(parser, true); ok {
+                    build(&builder, jez(rs, ref));
+                    return true;
+                }
+            }
+
+        case "jnz":
+            if rs, ok := parse_reg(parser); ok {
+                allow(parser, ",");
+
+                if ref, ok := parse_ref(parser, true); ok {
+                    build(&builder, jnz(rs, ref));
+                    return true;
+                }
+            }
+
+        case "jgez":
+            if rs, ok := parse_reg(parser); ok {
+                allow(parser, ",");
+
+                if ref, ok := parse_ref(parser, true); ok {
+                     build(&builder, jgez(rs, ref));
+                     return true;
+                }
+            }
+
+        case "jltz":
+            if rs, ok := parse_reg(parser); ok {
+                allow(parser, ",");
+
+                if ref, ok := parse_ref(parser, true); ok {
+                     build(&builder, jltz(rs, ref));
+                     return true;
+                }
+            }
+
+        case "jgtz":
+            if rs, ok := parse_reg(parser); ok {
+                allow(parser, ",");
+
+                if ref, ok := parse_ref(parser, true); ok {
+                     build(&builder, jgtz(rs, ref));
+                     return true;
+                }
+            }
+
+        case "jlez":
+            if rs, ok := parse_reg(parser); ok {
+                allow(parser, ",");
+
+                if ref, ok := parse_ref(parser, true); ok {
+                     build(&builder, jlez(rs, ref));
+                     return true;
+                }
+            }
+
+        case "jgezu":
+            if rs, ok := parse_reg(parser); ok {
+                allow(parser, ",");
+
+                if ref, ok := parse_ref(parser, true); ok {
+                     build(&builder, jgezu(rs, ref));
+                     return true;
+                }
+            }
+
+        case "jltzu":
+            if rs, ok := parse_reg(parser); ok {
+                allow(parser, ",");
+
+                if ref, ok := parse_ref(parser, true); ok {
+                     build(&builder, jltzu(rs, ref));
+                     return true;
+                }
+            }
+
+        case "jgtzu":
+            if rs, ok := parse_reg(parser); ok {
+                allow(parser, ",");
+
+                if ref, ok := parse_ref(parser, true); ok {
+                     build(&builder, jgtzu(rs, ref));
+                     return true;
+                }
+            }
+
+        case "jlezu":
+            if rs, ok := parse_reg(parser); ok {
+                allow(parser, ",");
+
+                if ref, ok := parse_ref(parser, true); ok {
+                     build(&builder, jlezu(rs, ref));
+                     return true;
+                }
+            }
+
+        case "addi":
+            if rd, ok := parse_reg(parser); ok {
+                allow(parser, ",");
+
+                if match(parser, Reg_Name) != nil {
+                    if rs1, ok := parse_reg(parser); ok {
+                        allow(parser, ",");
+
+                        if im, ok := parse_int(parser); ok {
+                            build(&builder, addi(rd, rs1, im));
+                            return true;
+                        }
+                    }
+                }
+                else if match(parser, Int, Uint) != nil {
+                    if im, ok := parse_int(parser); ok {
+                        build(&builder, addi(rd, rd, im));
+                        return true;
+                    }
                 }
                 else {
-                    instr.im = name.value;
+                    expect(parser, Reg_Name, Int, Uint); // @error
                 }
-
-                (^u64)(&parser.code[usage.index])^ = encode(instr);
             }
+
+        case "subi":
+            if rd, ok := parse_reg(parser); ok {
+                allow(parser, ",");
+
+                if match(parser, Reg_Name) != nil {
+                    if rs1, ok := parse_reg(parser); ok {
+                        allow(parser, ",");
+
+                        if im, ok := parse_int(parser); ok {
+                            build(&builder, subi(rd, rs1, im));
+                            return true;
+                        }
+                    }
+                }
+                else if match(parser, Int, Uint) != nil {
+                    if im, ok := parse_int(parser); ok {
+                        build(&builder, subi(rd, rd, im));
+                        return true;
+                    }
+                }
+                else {
+                    expect(parser, Reg_Name, Int, Uint); // @error
+                }
+            }
+
+        case "andi":
+            if rd, ok := parse_reg(parser); ok {
+                allow(parser, ",");
+
+                if match(parser, Reg_Name) != nil {
+                    if rs1, ok := parse_reg(parser); ok {
+                        allow(parser, ",");
+
+                        if im, ok := parse_int(parser); ok {
+                            build(&builder, andi(rd, rs1, im));
+                            return true;
+                        }
+                    }
+                }
+                else if match(parser, Int, Uint) != nil {
+                    if im, ok := parse_int(parser); ok {
+                        build(&builder, andi(rd, rd, im));
+                        return true;
+                    }
+                }
+                else {
+                    expect(parser, Reg_Name, Int, Uint); // @error
+                }
+            }
+
+        case "ori":
+            if rd, ok := parse_reg(parser); ok {
+                allow(parser, ",");
+
+                if match(parser, Reg_Name) != nil {
+                    if rs1, ok := parse_reg(parser); ok {
+                        allow(parser, ",");
+
+                        if im, ok := parse_int(parser); ok {
+                            build(&builder, ori(rd, rs1, im));
+                            return true;
+                        }
+                    }
+                }
+                else if match(parser, Int, Uint) != nil {
+                    if im, ok := parse_int(parser); ok {
+                        build(&builder, ori(rd, rd, im));
+                        return true;
+                    }
+                }
+                else {
+                    expect(parser, Reg_Name, Int, Uint); // @error
+                }
+            }
+
+        case "xori":
+            if rd, ok := parse_reg(parser); ok {
+                allow(parser, ",");
+
+                if match(parser, Reg_Name) != nil {
+                    if rs1, ok := parse_reg(parser); ok {
+                        allow(parser, ",");
+
+                        if im, ok := parse_int(parser); ok {
+                            build(&builder, xori(rd, rs1, im));
+                            return true;
+                        }
+                    }
+                }
+                else if match(parser, Int, Uint) != nil {
+                    if im, ok := parse_int(parser); ok {
+                        build(&builder, xori(rd, rd, im));
+                        return true;
+                    }
+                }
+                else {
+                    expect(parser, Reg_Name, Int, Uint); // @error
+                }
+            }
+
+        case "shli":
+            if rd, ok := parse_reg(parser); ok {
+                allow(parser, ",");
+
+                if match(parser, Reg_Name) != nil {
+                    if rs1, ok := parse_reg(parser); ok {
+                        allow(parser, ",");
+
+                        if im, ok := parse_uint(parser); ok {
+                            build(&builder, shli(rd, rs1, im));
+                            return true;
+                        }
+                    }
+                }
+                else if match(parser, Uint) != nil {
+                    if im, ok := parse_uint(parser); ok {
+                        build(&builder, shli(rd, rd, im));
+                        return true;
+                    }
+                }
+                else {
+                    expect(parser, Reg_Name, Int, Uint); // @error
+                }
+            }
+
+        case "shri":
+            if rd, ok := parse_reg(parser); ok {
+                allow(parser, ",");
+
+                if match(parser, Reg_Name) != nil {
+                    if rs1, ok := parse_reg(parser); ok {
+                        allow(parser, ",");
+
+                        if im, ok := parse_uint(parser); ok {
+                            build(&builder, shri(rd, rs1, im));
+                            return true;
+                        }
+                    }
+                }
+                else if match(parser, Uint) != nil {
+                    if im, ok := parse_uint(parser); ok {
+                        build(&builder, shri(rd, rd, im));
+                        return true;
+                    }
+                }
+                else {
+                    expect(parser, Reg_Name, Int, Uint); // @error
+                }
+            }
+
+        case "shai":
+            if rd, ok := parse_reg(parser); ok {
+                allow(parser, ",");
+
+                if match(parser, Reg_Name) != nil {
+                    if rs1, ok := parse_reg(parser); ok {
+                        allow(parser, ",");
+
+                        if im, ok := parse_int(parser); ok {
+                            build(&builder, shai(rd, rs1, im));
+                            return true;
+                        }
+                    }
+                }
+                else if match(parser, Int, Uint) != nil {
+                    if im, ok := parse_int(parser); ok {
+                        build(&builder, shai(rd, rd, im));
+                        return true;
+                    }
+                }
+                else {
+                    expect(parser, Reg_Name, Int, Uint); // @error
+                }
+            }
+
+        case "add":
+            if rd, ok := parse_reg(parser); ok {
+                allow(parser, ",");
+
+                if match(parser, Reg_Name) != nil {
+                    if rs1, ok := parse_reg(parser); ok {
+                        allow(parser, ",");
+
+                        if match(parser, Reg_Name) != nil {
+                            if rs2, ok := parse_reg(parser); ok {
+                                build(&builder, add(rd, rs1, rs2));
+                                return true;
+                            }
+                        }
+                        else if match(parser, Int, Uint) != nil {
+                            if im, ok := parse_int(parser); ok {
+                                build(&builder, add(rd, rs1, im));
+                                return true;
+                            }
+                        }
+                        else {
+                            build(&builder, add(rd, rd, rs1));
+                            return true;
+                        }
+                    }
+                }
+                else if match(parser, Int, Uint) != nil {
+                    if im, ok := parse_int(parser); ok {
+                        build(&builder, add(rd, rd, im));
+                        return true;
+                    }
+                }
+                else {
+                    expect(parser, Reg_Name, Int, Uint); // @error
+                }
+            }
+
+        case "sub":
+            if rd, ok := parse_reg(parser); ok {
+                allow(parser, ",");
+
+                if match(parser, Reg_Name) != nil {
+                    if rs1, ok := parse_reg(parser); ok {
+                        allow(parser, ",");
+
+                        if match(parser, Reg_Name) != nil {
+                            if rs2, ok := parse_reg(parser); ok {
+                                build(&builder, sub(rd, rs1, rs2));
+                                return true;
+                            }
+                        }
+                        else if match(parser, Int, Uint) != nil {
+                            if im, ok := parse_int(parser); ok {
+                                build(&builder, sub(rd, rs1, im));
+                                return true;
+                            }
+                        }
+                        else {
+                            build(&builder, sub(rd, rd, rs1));
+                            return true;
+                        }
+                    }
+                }
+                else if match(parser, Int, Uint) != nil {
+                    if im, ok := parse_int(parser); ok {
+                        build(&builder, sub(rd, rd, im));
+                        return true;
+                    }
+                }
+                else {
+                    expect(parser, Reg_Name, Int, Uint); // @error
+                }
+            }
+
+        case "mul":
+            if rd, ok := parse_reg(parser); ok {
+                allow(parser, ",");
+
+                if rs1, ok := parse_reg(parser); ok {
+                    allow(parser, ",");
+
+                    if match(parser, Reg_Name) != nil {
+                        if rs2, ok := parse_reg(parser); ok {
+                            build(&builder, mul(rd, rs1, rs2));
+                            return true;
+                        }
+                    }
+                    else {
+                        build(&builder, mul(rd, rd, rs1));
+                        return true;
+                    }
+                }
+            }
+
+        case "div":
+            if rd, ok := parse_reg(parser); ok {
+                allow(parser, ",");
+
+                if rs1, ok := parse_reg(parser); ok {
+                    allow(parser, ",");
+
+                    if match(parser, Reg_Name) != nil {
+                        if rs2, ok := parse_reg(parser); ok {
+                            build(&builder, div(rd, rs1, rs2));
+                            return true;
+                        }
+                    }
+                    else {
+                        build(&builder, div(rd, rd, rs1));
+                        return true;
+                    }
+                }
+            }
+
+        case "mod":
+            if rd, ok := parse_reg(parser); ok {
+                allow(parser, ",");
+
+                if rs1, ok := parse_reg(parser); ok {
+                    allow(parser, ",");
+
+                    if match(parser, Reg_Name) != nil {
+                        if rs2, ok := parse_reg(parser); ok {
+                            build(&builder, mod(rd, rs1, rs2));
+                            return true;
+                        }
+                    }
+                    else {
+                        build(&builder, mod(rd, rd, rs1));
+                        return true;
+                    }
+                }
+            }
+
+        case "mulu":
+            if rd, ok := parse_reg(parser); ok {
+                allow(parser, ",");
+
+                if rs1, ok := parse_reg(parser); ok {
+                    allow(parser, ",");
+
+                    if match(parser, Reg_Name) != nil {
+                        if rs2, ok := parse_reg(parser); ok {
+                            build(&builder, mulu(rd, rs1, rs2));
+                            return true;
+                        }
+                    }
+                    else {
+                        build(&builder, mulu(rd, rd, rs1));
+                        return true;
+                    }
+                }
+            }
+
+        case "divu":
+            if rd, ok := parse_reg(parser); ok {
+                allow(parser, ",");
+
+                if rs1, ok := parse_reg(parser); ok {
+                    allow(parser, ",");
+
+                    if match(parser, Reg_Name) != nil {
+                        if rs2, ok := parse_reg(parser); ok {
+                            build(&builder, divu(rd, rs1, rs2));
+                            return true;
+                        }
+                    }
+                    else {
+                        build(&builder, divu(rd, rd, rs1));
+                        return true;
+                    }
+                }
+            }
+
+        case "modu":
+            if rd, ok := parse_reg(parser); ok {
+                allow(parser, ",");
+
+                if rs1, ok := parse_reg(parser); ok {
+                    allow(parser, ",");
+
+                    if match(parser, Reg_Name) != nil {
+                        if rs2, ok := parse_reg(parser); ok {
+                            build(&builder, modu(rd, rs1, rs2));
+                            return true;
+                        }
+                    }
+                    else {
+                        build(&builder, modu(rd, rd, rs1));
+                        return true;
+                    }
+                }
+            }
+
+        case "addf":
+            if rd, ok := parse_reg(parser); ok {
+                allow(parser, ",");
+
+                if rs1, ok := parse_reg(parser); ok {
+                    allow(parser, ",");
+
+                    if match(parser, Reg_Name) != nil {
+                        if rs2, ok := parse_reg(parser); ok {
+                            build(&builder, addf(rd, rs1, rs2));
+                            return true;
+                        }
+                    }
+                    else {
+                        build(&builder, addf(rd, rd, rs1));
+                        return true;
+                    }
+                }
+            }
+
+        case "subf":
+            if rd, ok := parse_reg(parser); ok {
+                allow(parser, ",");
+
+                if rs1, ok := parse_reg(parser); ok {
+                    allow(parser, ",");
+
+                    if match(parser, Reg_Name) != nil {
+                        if rs2, ok := parse_reg(parser); ok {
+                            build(&builder, subf(rd, rs1, rs2));
+                            return true;
+                        }
+                    }
+                    else {
+                        build(&builder, subf(rd, rd, rs1));
+                        return true;
+                    }
+                }
+            }
+
+        case "mulf":
+            if rd, ok := parse_reg(parser); ok {
+                allow(parser, ",");
+
+                if rs1, ok := parse_reg(parser); ok {
+                    allow(parser, ",");
+
+                    if match(parser, Reg_Name) != nil {
+                        if rs2, ok := parse_reg(parser); ok {
+                            build(&builder, mulf(rd, rs1, rs2));
+                            return true;
+                        }
+                    }
+                    else {
+                        build(&builder, mulf(rd, rd, rs1));
+                        return true;
+                    }
+                }
+            }
+
+        case "divf":
+            if rd, ok := parse_reg(parser); ok {
+                allow(parser, ",");
+
+                if rs1, ok := parse_reg(parser); ok {
+                    allow(parser, ",");
+
+                    if match(parser, Reg_Name) != nil {
+                        if rs2, ok := parse_reg(parser); ok {
+                            build(&builder, divf(rd, rs1, rs2));
+                            return true;
+                        }
+                    }
+                    else {
+                        build(&builder, divf(rd, rd, rs1));
+                        return true;
+                    }
+                }
+            }
+
+        case "and":
+            if rd, ok := parse_reg(parser); ok {
+                allow(parser, ",");
+
+                if match(parser, Reg_Name) != nil {
+                    if rs1, ok := parse_reg(parser); ok {
+                        allow(parser, ",");
+
+                        if match(parser, Reg_Name) != nil {
+                            if rs2, ok := parse_reg(parser); ok {
+                                build(&builder, and(rd, rs1, rs2));
+                                return true;
+                            }
+                        }
+                        else if match(parser, Int, Uint) != nil {
+                            if im, ok := parse_int(parser); ok {
+                                build(&builder, and(rd, rs1, im));
+                                return true;
+                            }
+                        }
+                        else {
+                            build(&builder, and(rd, rd, rs1));
+                            return true;
+                        }
+                    }
+                }
+                else if match(parser, Int, Uint) != nil {
+                    if im, ok := parse_int(parser); ok {
+                        build(&builder, and(rd, rd, im));
+                        return true;
+                    }
+                }
+                else {
+                    expect(parser, Reg_Name, Int, Uint); // @error
+                }
+            }
+
+        case "or":
+            if rd, ok := parse_reg(parser); ok {
+                allow(parser, ",");
+
+                if match(parser, Reg_Name) != nil {
+                    if rs1, ok := parse_reg(parser); ok {
+                        allow(parser, ",");
+
+                        if match(parser, Reg_Name) != nil {
+                            if rs2, ok := parse_reg(parser); ok {
+                                build(&builder, or(rd, rs1, rs2));
+                                return true;
+                            }
+                        }
+                        else if match(parser, Int, Uint) != nil {
+                            if im, ok := parse_int(parser); ok {
+                                build(&builder, or(rd, rs1, im));
+                                return true;
+                            }
+                        }
+                        else {
+                            build(&builder, or(rd, rd, rs1));
+                            return true;
+                        }
+                    }
+                }
+                else if match(parser, Int, Uint) != nil {
+                    if im, ok := parse_int(parser); ok {
+                        build(&builder, or(rd, rd, im));
+                        return true;
+                    }
+                }
+                else {
+                    expect(parser, Reg_Name, Int, Uint); // @error
+                }
+            }
+
+        case "xor":
+            if rd, ok := parse_reg(parser); ok {
+                allow(parser, ",");
+
+                if match(parser, Reg_Name) != nil {
+                    if rs1, ok := parse_reg(parser); ok {
+                        allow(parser, ",");
+
+                        if match(parser, Reg_Name) != nil {
+                            if rs2, ok := parse_reg(parser); ok {
+                                build(&builder, xor(rd, rs1, rs2));
+                                return true;
+                            }
+                        }
+                        else if match(parser, Int, Uint) != nil {
+                            if im, ok := parse_int(parser); ok {
+                                build(&builder, xor(rd, rs1, im));
+                                return true;
+                            }
+                        }
+                        else {
+                            build(&builder, xor(rd, rd, rs1));
+                            return true;
+                        }
+                    }
+                }
+                else if match(parser, Int, Uint) != nil {
+                    if im, ok := parse_int(parser); ok {
+                        build(&builder, xor(rd, rd, im));
+                        return true;
+                    }
+                }
+                else {
+                    expect(parser, Reg_Name, Int, Uint); // @error
+                }
+            }
+
+        case "shl":
+            if rd, ok := parse_reg(parser); ok {
+                allow(parser, ",");
+
+                if match(parser, Reg_Name) != nil {
+                    if rs1, ok := parse_reg(parser); ok {
+                        allow(parser, ",");
+
+                        if match(parser, Reg_Name) != nil {
+                            if rs2, ok := parse_reg(parser); ok {
+                                build(&builder, shl(rd, rs1, rs2));
+                                return true;
+                            }
+                        }
+                        else if match(parser, Int, Uint) != nil {
+                            if im, ok := parse_uint(parser); ok {
+                                build(&builder, shl(rd, rs1, im));
+                                return true;
+                            }
+                        }
+                        else {
+                            build(&builder, shl(rd, rd, rs1));
+                            return true;
+                        }
+                    }
+                }
+                else if match(parser, Uint) != nil {
+                    if im, ok := parse_uint(parser); ok {
+                        build(&builder, shl(rd, rd, im));
+                        return true;
+                    }
+                }
+                else {
+                    expect(parser, Reg_Name, Int, Uint); // @error
+                }
+            }
+
+        case "shr":
+            if rd, ok := parse_reg(parser); ok {
+                allow(parser, ",");
+
+                if match(parser, Reg_Name) != nil {
+                    if rs1, ok := parse_reg(parser); ok {
+                        allow(parser, ",");
+
+                        if match(parser, Reg_Name) != nil {
+                            if rs2, ok := parse_reg(parser); ok {
+                                build(&builder, shr(rd, rs1, rs2));
+                                return true;
+                            }
+                        }
+                        else if match(parser, Int, Uint) != nil {
+                            if im, ok := parse_uint(parser); ok {
+                                build(&builder, shr(rd, rs1, im));
+                                return true;
+                            }
+                        }
+                        else {
+                            build(&builder, shr(rd, rd, rs1));
+                            return true;
+                        }
+                    }
+                }
+                else if match(parser, Uint) != nil {
+                    if im, ok := parse_uint(parser); ok {
+                        build(&builder, shr(rd, rd, im));
+                        return true;
+                    }
+                }
+                else {
+                    expect(parser, Reg_Name, Int, Uint); // @error
+                }
+            }
+
+        case "sha":
+            if rd, ok := parse_reg(parser); ok {
+                allow(parser, ",");
+
+                if match(parser, Reg_Name) != nil {
+                    if rs1, ok := parse_reg(parser); ok {
+                        allow(parser, ",");
+
+                        if match(parser, Reg_Name) != nil {
+                            if rs2, ok := parse_reg(parser); ok {
+                                build(&builder, sha(rd, rs1, rs2));
+                                return true;
+                            }
+                        }
+                        else if match(parser, Int, Uint) != nil {
+                            if im, ok := parse_int(parser); ok {
+                                build(&builder, sha(rd, rs1, im));
+                                return true;
+                            }
+                        }
+                        else {
+                            build(&builder, sha(rd, rd, rs1));
+                            return true;
+                        }
+                    }
+                }
+                else if match(parser, Int, Uint) != nil {
+                    if im, ok := parse_int(parser); ok {
+                        build(&builder, sha(rd, rd, im));
+                        return true;
+                    }
+                }
+                else {
+                    expect(parser, Reg_Name, Int, Uint); // @error
+                }
+            }
+
+        case "mov":
+            if rd, ok := parse_reg(parser); ok {
+                allow(parser, ",");
+
+                if match(parser, Reg_Name) != nil {
+                    if rs, ok := parse_reg(parser); ok {
+                        build(&builder, mov(rd, rs));
+                        return true;
+                    }
+                }
+                else if match(parser, Int, Uint, Float) != nil {
+                    if im, ok := parse_im(parser); ok {
+                        build(&builder, mov(rd, im));
+                        return true;
+                    }
+                }
+                else {
+                    if ref, ok := parse_ref(parser); ok {
+                        build(&builder, movi(rd, ref));
+                        return true;
+                    }
+                }
+            }
+
+        case "movi":
+            if rd, ok := parse_reg(parser); ok {
+                allow(parser, ",");
+
+                if match(parser, Ref_Name) != nil {
+                    if ref, ok := parse_ref(parser); ok {
+                        build(&builder, movi(rd, ref));
+                        return true;
+                    }
+                }
+                else {
+                    if im, ok := parse_im(parser); ok {
+                        build(&builder, movi(rd, im));
+                        return true;
+                    }
+                }
+            }
+
+        case "inc":
+            if rd, ok := parse_reg(parser); ok {
+                build(&builder, inc(rd));
+                return true;
+            }
+
+        case "dec":
+            if rd, ok := parse_reg(parser); ok {
+                build(&builder, dec(rd));
+                return true;
+            }
+
+        case "call":
+            if match(parser, Reg_Name) != nil {
+                if rs, ok := parse_reg(parser); ok {
+                    build(&builder, call(rs));
+                }
+            }
+            else {
+                if im, ok := parse_im(parser); ok {
+                    build(&builder, call(im));
+                }
+            }
+
+        case "tail":
+            if match(parser, Reg_Name) != nil {
+                if rs, ok := parse_reg(parser); ok {
+                    build(&builder, tail(rs));
+                }
+            }
+            else {
+                if im, ok := parse_im(parser); ok {
+                    build(&builder, tail(im));
+                }
+            }
+
+        case "ret":
+            build(&builder, ret());
+            return true;
+
+        case:
+            parser_error(parser, "Unimplemented or invalid opcode: %v", op.text);
         }
     }
 
-    bytecode : Bytecode;
-    bytecode.registers   = parser.registers;
-    bytecode.code        = parser.code[..];
-    bytecode.data        = parser.data[..];
-    bytecode.stack_size  = parser.stack_size;
-    bytecode.memory_size = parser.memory_size;
-
-    return bytecode, true;
+    return false;
 }
 
-parse_file :: proc(filename : string) -> (Bytecode, bool) {
-    if bytes, ok := os.read_entire_file(filename); ok {
-        return parse_text(string(bytes));
+parse_reg :: inline proc(using parser: ^Parser) -> (Reg, bool) {
+    if token := expect(parser, Reg_Name); token != nil {
+        switch token.text {
+        case "gp": return GP, true;
+        case "bp": return BP, true;
+        case "sp": return SP, true;
+        case "fp": return FP, true;
+        case "x0": return X0, true;
+        case "x1": return X1, true;
+        case "x2": return X2, true;
+        case "x3": return X3, true;
+        case "rz": return RZ, true;
+        case "ra": return RA, true;
+        case "g0": return G0, true;
+        case "g1": return G1, true;
+        case "g2": return G2, true;
+        case "g3": return G3, true;
+        case "g4": return G4, true;
+        case "g5": return G5, true;
+        case "a0": return A0, true;
+        case "a1": return A1, true;
+        case "a2": return A2, true;
+        case "a3": return A3, true;
+        case "a4": return A4, true;
+        case "a5": return A5, true;
+        case "a6": return A6, true;
+        case "a7": return A7, true;
+        case "s0": return S0, true;
+        case "s1": return S1, true;
+        case "s2": return S2, true;
+        case "s3": return S3, true;
+        case "s4": return S4, true;
+        case "s5": return S5, true;
+        case "s6": return S6, true;
+        case "s7": return S7, true;
+        case "t0": return T0, true;
+        case "t1": return T1, true;
+        case "t2": return T2, true;
+        case "t3": return T3, true;
+        case "t4": return T4, true;
+        case "t5": return T5, true;
+        case "t6": return T6, true;
+        case "t7": return T7, true;
+
+        case: panic("Invalid register got past lexer");
+        }
     }
 
-    return Bytecode{}, false;
+    return Reg{}, false;
+}
+
+parse_reg_offset :: inline proc(using parser: ^Parser) -> (Reg, i64, bool) {
+    if reg, ok := parse_reg(parser); ok {
+        if allow(parser, "[") != nil {
+            if im, ok := parse_int(parser); ok {
+                if expect(parser, "]") != nil {
+                    return reg, im, true;
+                }
+            }
+            else {
+                parser_error(parser, "Expected an offset");
+            }
+        }
+
+        return reg, 0, true;
+    }
+
+    return Reg{}, i64{}, false;
+}
+
+parse_im :: inline proc(using parser: ^Parser) -> (i64, bool) {
+    switch token.kind {
+    case Int:
+        if i, ok := parse_int(parser); ok {
+            return i, ok;
+        }
+
+    case Uint:
+        if u, ok := parse_uint(parser); ok {
+            return (^i64)(&u)^, ok;
+        }
+
+    case Float:
+        if f, ok := parse_float(parser); ok {
+            return (^i64)(&f)^, ok;
+        }
+    }
+
+    return 0, false;
+}
+
+parse_int :: inline proc(using parser: ^Parser) -> (i64, bool) {
+    if tok := allow(parser, Int, Uint); tok != nil {
+        return strconv.parse_i64(tok.text), true;
+    }
+
+    return 0, true;
+}
+
+parse_uint :: inline proc(using parser: ^Parser) -> (u64, bool) {
+    if tok := allow(parser, Uint); tok != nil {
+        return strconv.parse_u64(tok.text), true;
+    }
+
+    return 0, true;
+}
+
+parse_float :: inline proc(using parser: ^Parser) -> (f64, bool) {
+    if tok := allow(parser, Float); tok != nil {
+        return strconv.parse_f64(tok.text), true;
+    }
+
+    return 0, true;
+}
+
+parse_ref :: inline proc(using parser: ^Parser, rel := false) -> (i64, bool) {
+    if tok := allow(parser, "<", ">"); tok != nil {
+        if ref := expect(parser, Uint); ref != nil {
+            switch tok.text {
+            case "<": return add_backward_ref(&builder, ref.text, i64, rel), true;
+            case ">": return add_forward_ref(&builder, ref.text, i64, rel), true;
+            }
+        }
+    }
+    else {
+        if ref := expect(parser, Ref_Name); ref != nil {
+            return add_ref(&builder, ref.text, rel), true;
+        }
+    }
+
+    return 0, false;
 }

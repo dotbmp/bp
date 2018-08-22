@@ -86,6 +86,14 @@ float rbox(vec2 p, vec2 b, float r) {
     return length(max(abs(p)-(b-r), 0.0))-r;
 }
 
+float sd_triangle(vec2 p, vec2 p1, vec2 p2, vec2 p3) {
+    float d1 = dot(normalize(vec2((p2.y - p1.y), -(p2.x - p1.x))), p - p1);
+    float d2 = dot(normalize(vec2((p3.y - p2.y), -(p3.x - p2.x))), p - p2);
+    float d3 = dot(normalize(vec2((p1.y - p3.y), -(p1.x - p3.x))), p - p3);
+    
+    return max(d1, max(d2, d3));
+}
+
 
 vec4 blend(vec4 a, vec4 b) {
     return vec4(
