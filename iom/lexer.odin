@@ -6,7 +6,7 @@
  *  @Creation: 21-06-2018 13:14:40 UTC-5
  *
  *  @Last By:   Brendan Punsky
- *  @Last Time: 22-08-2018 13:54:48 UTC-5
+ *  @Last Time: 22-08-2018 20:01:20 UTC-5
  *  
  *  @Description:
  *  
@@ -44,6 +44,7 @@ using Token_Kind :: enum {
     Uint,
     Float,
     String,
+    Char,
 
     End,
 }
@@ -206,6 +207,18 @@ lex :: proc(using lexer: ^Lexer) -> []Token {
                 break;
             }
 
+        case '\'':
+            token.kind = Char;
+
+            char = next_char(lexer);
+
+            if char = next_char(lexer); char == '\'' {
+                char = next_char(lexer);
+            }
+            else {
+                lexer_error(lexer, "Expected `'`; got `%v`", char);
+            }
+
         case '#':
             token.kind = Comment;
 
@@ -289,12 +302,12 @@ lexer_error :: proc(using lexer: ^Lexer, format: string, args: ..any, loc := #ca
     caller: string;
 
     when false {
-        caller = fmt.aprintf("%s(%d:%d)", loc.file_path, loc.line, loc.column);
+        caller = fmt.aprintf(" %s(%d:%d)", loc.file_path, loc.line, loc.column);
         defer delete(caller);
     }
 
     message := fmt.aprintf(format, ..args);
     defer delete(message);
 
-    fmt.printf_err("%s(%d:%d): %s%s", file_name, lines, chars, message, caller);
+    fmt.printf_err("%s(%d:%d) %s%s\n", file_name, lines, chars, message, caller);
 }

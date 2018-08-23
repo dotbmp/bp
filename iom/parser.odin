@@ -6,7 +6,7 @@
  *  @Creation: 19-08-2018 12:41:53 UTC-5
  *
  *  @Last By:   Brendan Punsky
- *  @Last Time: 22-08-2018 14:08:08 UTC-5
+ *  @Last Time: 22-08-2018 20:29:03 UTC-5
  *  
  *  @Description:
  *  
@@ -25,8 +25,8 @@ import "bp:path"
 parser_error :: proc(using parser: ^Parser, format: string, args: ..any, loc := #caller_location) {
     caller: string;
 
-    when false {
-        caller = fmt.aprintf("%s(%d:%d)", loc.file_path, loc.line, loc.column);
+    when true {
+        caller = fmt.aprintf(" %s(%d:%d)", loc.file_path, loc.line, loc.column);
         defer delete(caller);
     }
 
@@ -108,23 +108,23 @@ allow_text :: inline proc(using parser: ^Parser, texts: ..string) -> ^Token {
 
 expect :: proc[expect_kind, expect_text];
 
-expect_kind :: inline proc(using parser: ^Parser, kinds: ..Token_Kind) -> ^Token {
+expect_kind :: inline proc(using parser: ^Parser, kinds: ..Token_Kind, loc := #caller_location) -> ^Token {
     if tok := allow_kind(parser, ..kinds); tok != nil {
         return tok;
     }
     else {  
-        parser_error(parser, "Expected %v; got %v", kinds, tok.kind);
+        parser_error(parser=parser, format="Expected %v; got %v", args=[]any{kinds, token.kind}, loc=loc);
     }
 
     return nil;
 }
 
-expect_text :: inline proc(using parser: ^Parser, texts: ..string) -> ^Token {
+expect_text :: inline proc(using parser: ^Parser, texts: ..string, loc := #caller_location) -> ^Token {
     if tok := allow_text(parser, ..texts); tok != nil {
         return tok;
     }
     else {  
-        parser_error(parser, "Expected %v; got %v", texts, tok.text);
+        parser_error(parser=parser, format="Expected %v; got %v", args=[]any{texts, tok.text}, loc=loc);
     }
 
     return nil;
@@ -216,67 +216,8 @@ parse_line :: inline proc(using parser: ^Parser) -> bool {
         return true;
 
     case Type_Name:
-        token := token;
-        next_token(parser);
-
-        switch token.text {
-        case "i64", "i32", "i16", "i8":
-            if im, ok := parse_int(parser); ok {
-                switch token.text {
-                case "i64":
-                    value := i64(im);
-                    add_bytes(&builder, mem.ptr_to_bytes(&value));
-                case "i32":
-                    value := i32(im);
-                    add_bytes(&builder, mem.ptr_to_bytes(&value));
-                case "i16":
-                    value := i16(im);
-                    add_bytes(&builder, mem.ptr_to_bytes(&value));
-                case "i8":
-                    value := i8(im);
-                    add_bytes(&builder, mem.ptr_to_bytes(&value));
-                }
-
-                return true;
-            }
-
-        case "u64", "u32", "u16", "u8":
-            if im, ok := parse_uint(parser); ok {
-                switch token.text {
-                case "u64":
-                    value := u64(im);
-                    add_bytes(&builder, mem.ptr_to_bytes(&value));
-
-                case "u32":
-                    value := u32(im);
-                    add_bytes(&builder, mem.ptr_to_bytes(&value));
-
-                case "u16":
-                    value := u16(im);
-                    add_bytes(&builder, mem.ptr_to_bytes(&value));
-
-                case "u8":
-                    value := u8(im);
-                    add_bytes(&builder, mem.ptr_to_bytes(&value));
-                }
-
-                return true;
-            }
-
-        case "f64", "f32":
-            if im, ok := parse_float(parser); ok {
-                switch token.text {
-                case "f64":
-                    value := f64(im);
-                    add_bytes(&builder, mem.ptr_to_bytes(&value));
-                
-                case "f32":
-                    value := f32(im);
-                    add_bytes(&builder, mem.ptr_to_bytes(&value));
-                }
-
-                return true;
-            }
+        if parse_values(parser) {
+            return true;
         }
 
     case Uint:
@@ -705,14 +646,14 @@ parse_instr :: inline proc(using parser: ^Parser) -> bool {
                         }
                     }
                 }
-                else if match(parser, Int, Uint) != nil {
+                else if match(parser, Int, Uint, Char) != nil {
                     if im, ok := parse_int(parser); ok {
                         build(&builder, addi(rd, rd, im));
                         return true;
                     }
                 }
                 else {
-                    expect(parser, Reg_Name, Int, Uint); // @error
+                    expect(parser, Reg_Name, Int, Uint, Char); // @error
                 }
             }
 
@@ -730,14 +671,14 @@ parse_instr :: inline proc(using parser: ^Parser) -> bool {
                         }
                     }
                 }
-                else if match(parser, Int, Uint) != nil {
+                else if match(parser, Int, Uint, Char) != nil {
                     if im, ok := parse_int(parser); ok {
                         build(&builder, subi(rd, rd, im));
                         return true;
                     }
                 }
                 else {
-                    expect(parser, Reg_Name, Int, Uint); // @error
+                    expect(parser, Reg_Name, Int, Uint, Char); // @error
                 }
             }
 
@@ -755,14 +696,14 @@ parse_instr :: inline proc(using parser: ^Parser) -> bool {
                         }
                     }
                 }
-                else if match(parser, Int, Uint) != nil {
+                else if match(parser, Int, Uint, Char) != nil {
                     if im, ok := parse_int(parser); ok {
                         build(&builder, andi(rd, rd, im));
                         return true;
                     }
                 }
                 else {
-                    expect(parser, Reg_Name, Int, Uint); // @error
+                    expect(parser, Reg_Name, Int, Uint, Char); // @error
                 }
             }
 
@@ -780,14 +721,14 @@ parse_instr :: inline proc(using parser: ^Parser) -> bool {
                         }
                     }
                 }
-                else if match(parser, Int, Uint) != nil {
+                else if match(parser, Int, Uint, Char) != nil {
                     if im, ok := parse_int(parser); ok {
                         build(&builder, ori(rd, rd, im));
                         return true;
                     }
                 }
                 else {
-                    expect(parser, Reg_Name, Int, Uint); // @error
+                    expect(parser, Reg_Name, Int, Uint, Char); // @error
                 }
             }
 
@@ -805,14 +746,14 @@ parse_instr :: inline proc(using parser: ^Parser) -> bool {
                         }
                     }
                 }
-                else if match(parser, Int, Uint) != nil {
+                else if match(parser, Int, Uint, Char) != nil {
                     if im, ok := parse_int(parser); ok {
                         build(&builder, xori(rd, rd, im));
                         return true;
                     }
                 }
                 else {
-                    expect(parser, Reg_Name, Int, Uint); // @error
+                    expect(parser, Reg_Name, Int, Uint, Char); // @error
                 }
             }
 
@@ -837,7 +778,7 @@ parse_instr :: inline proc(using parser: ^Parser) -> bool {
                     }
                 }
                 else {
-                    expect(parser, Reg_Name, Int, Uint); // @error
+                    expect(parser, Reg_Name, Int, Uint, Char); // @error
                 }
             }
 
@@ -862,7 +803,7 @@ parse_instr :: inline proc(using parser: ^Parser) -> bool {
                     }
                 }
                 else {
-                    expect(parser, Reg_Name, Int, Uint); // @error
+                    expect(parser, Reg_Name, Int, Uint, Char); // @error
                 }
             }
 
@@ -880,14 +821,14 @@ parse_instr :: inline proc(using parser: ^Parser) -> bool {
                         }
                     }
                 }
-                else if match(parser, Int, Uint) != nil {
+                else if match(parser, Int, Uint, Char) != nil {
                     if im, ok := parse_int(parser); ok {
                         build(&builder, shai(rd, rd, im));
                         return true;
                     }
                 }
                 else {
-                    expect(parser, Reg_Name, Int, Uint); // @error
+                    expect(parser, Reg_Name, Int, Uint, Char); // @error
                 }
             }
 
@@ -905,7 +846,7 @@ parse_instr :: inline proc(using parser: ^Parser) -> bool {
                                 return true;
                             }
                         }
-                        else if match(parser, Int, Uint) != nil {
+                        else if match(parser, Int, Uint, Char) != nil {
                             if im, ok := parse_int(parser); ok {
                                 build(&builder, add(rd, rs1, im));
                                 return true;
@@ -917,14 +858,14 @@ parse_instr :: inline proc(using parser: ^Parser) -> bool {
                         }
                     }
                 }
-                else if match(parser, Int, Uint) != nil {
+                else if match(parser, Int, Uint, Char) != nil {
                     if im, ok := parse_int(parser); ok {
                         build(&builder, add(rd, rd, im));
                         return true;
                     }
                 }
                 else {
-                    expect(parser, Reg_Name, Int, Uint); // @error
+                    expect(parser, Reg_Name, Int, Uint, Char); // @error
                 }
             }
 
@@ -942,7 +883,7 @@ parse_instr :: inline proc(using parser: ^Parser) -> bool {
                                 return true;
                             }
                         }
-                        else if match(parser, Int, Uint) != nil {
+                        else if match(parser, Int, Uint, Char) != nil {
                             if im, ok := parse_int(parser); ok {
                                 build(&builder, sub(rd, rs1, im));
                                 return true;
@@ -954,14 +895,14 @@ parse_instr :: inline proc(using parser: ^Parser) -> bool {
                         }
                     }
                 }
-                else if match(parser, Int, Uint) != nil {
+                else if match(parser, Int, Uint, Char) != nil {
                     if im, ok := parse_int(parser); ok {
                         build(&builder, sub(rd, rd, im));
                         return true;
                     }
                 }
                 else {
-                    expect(parser, Reg_Name, Int, Uint); // @error
+                    expect(parser, Reg_Name, Int, Uint, Char); // @error
                 }
             }
 
@@ -1179,7 +1120,7 @@ parse_instr :: inline proc(using parser: ^Parser) -> bool {
                                 return true;
                             }
                         }
-                        else if match(parser, Int, Uint) != nil {
+                        else if match(parser, Int, Uint, Char) != nil {
                             if im, ok := parse_int(parser); ok {
                                 build(&builder, and(rd, rs1, im));
                                 return true;
@@ -1191,14 +1132,14 @@ parse_instr :: inline proc(using parser: ^Parser) -> bool {
                         }
                     }
                 }
-                else if match(parser, Int, Uint) != nil {
+                else if match(parser, Int, Uint, Char) != nil {
                     if im, ok := parse_int(parser); ok {
                         build(&builder, and(rd, rd, im));
                         return true;
                     }
                 }
                 else {
-                    expect(parser, Reg_Name, Int, Uint); // @error
+                    expect(parser, Reg_Name, Int, Uint, Char); // @error
                 }
             }
 
@@ -1216,7 +1157,7 @@ parse_instr :: inline proc(using parser: ^Parser) -> bool {
                                 return true;
                             }
                         }
-                        else if match(parser, Int, Uint) != nil {
+                        else if match(parser, Int, Uint, Char) != nil {
                             if im, ok := parse_int(parser); ok {
                                 build(&builder, or(rd, rs1, im));
                                 return true;
@@ -1228,14 +1169,14 @@ parse_instr :: inline proc(using parser: ^Parser) -> bool {
                         }
                     }
                 }
-                else if match(parser, Int, Uint) != nil {
+                else if match(parser, Int, Uint, Char) != nil {
                     if im, ok := parse_int(parser); ok {
                         build(&builder, or(rd, rd, im));
                         return true;
                     }
                 }
                 else {
-                    expect(parser, Reg_Name, Int, Uint); // @error
+                    expect(parser, Reg_Name, Int, Uint, Char); // @error
                 }
             }
 
@@ -1253,7 +1194,7 @@ parse_instr :: inline proc(using parser: ^Parser) -> bool {
                                 return true;
                             }
                         }
-                        else if match(parser, Int, Uint) != nil {
+                        else if match(parser, Int, Uint, Char) != nil {
                             if im, ok := parse_int(parser); ok {
                                 build(&builder, xor(rd, rs1, im));
                                 return true;
@@ -1265,14 +1206,14 @@ parse_instr :: inline proc(using parser: ^Parser) -> bool {
                         }
                     }
                 }
-                else if match(parser, Int, Uint) != nil {
+                else if match(parser, Int, Uint, Char) != nil {
                     if im, ok := parse_int(parser); ok {
                         build(&builder, xor(rd, rd, im));
                         return true;
                     }
                 }
                 else {
-                    expect(parser, Reg_Name, Int, Uint); // @error
+                    expect(parser, Reg_Name, Int, Uint, Char); // @error
                 }
             }
 
@@ -1290,7 +1231,7 @@ parse_instr :: inline proc(using parser: ^Parser) -> bool {
                                 return true;
                             }
                         }
-                        else if match(parser, Int, Uint) != nil {
+                        else if match(parser, Int, Uint, Char) != nil {
                             if im, ok := parse_uint(parser); ok {
                                 build(&builder, shl(rd, rs1, im));
                                 return true;
@@ -1309,7 +1250,7 @@ parse_instr :: inline proc(using parser: ^Parser) -> bool {
                     }
                 }
                 else {
-                    expect(parser, Reg_Name, Int, Uint); // @error
+                    expect(parser, Reg_Name, Int, Uint, Char); // @error
                 }
             }
 
@@ -1327,7 +1268,7 @@ parse_instr :: inline proc(using parser: ^Parser) -> bool {
                                 return true;
                             }
                         }
-                        else if match(parser, Int, Uint) != nil {
+                        else if match(parser, Int, Uint, Char) != nil {
                             if im, ok := parse_uint(parser); ok {
                                 build(&builder, shr(rd, rs1, im));
                                 return true;
@@ -1346,7 +1287,7 @@ parse_instr :: inline proc(using parser: ^Parser) -> bool {
                     }
                 }
                 else {
-                    expect(parser, Reg_Name, Int, Uint); // @error
+                    expect(parser, Reg_Name, Int, Uint, Char); // @error
                 }
             }
 
@@ -1364,7 +1305,7 @@ parse_instr :: inline proc(using parser: ^Parser) -> bool {
                                 return true;
                             }
                         }
-                        else if match(parser, Int, Uint) != nil {
+                        else if match(parser, Int, Uint, Char) != nil {
                             if im, ok := parse_int(parser); ok {
                                 build(&builder, sha(rd, rs1, im));
                                 return true;
@@ -1376,14 +1317,14 @@ parse_instr :: inline proc(using parser: ^Parser) -> bool {
                         }
                     }
                 }
-                else if match(parser, Int, Uint) != nil {
+                else if match(parser, Int, Uint, Char) != nil {
                     if im, ok := parse_int(parser); ok {
                         build(&builder, sha(rd, rd, im));
                         return true;
                     }
                 }
                 else {
-                    expect(parser, Reg_Name, Int, Uint); // @error
+                    expect(parser, Reg_Name, Int, Uint, Char); // @error
                 }
             }
 
@@ -1397,7 +1338,7 @@ parse_instr :: inline proc(using parser: ^Parser) -> bool {
                         return true;
                     }
                 }
-                else if match(parser, Int, Uint, Float) != nil {
+                else if match(parser, Int, Uint, Float, Char) != nil {
                     if im, ok := parse_im(parser); ok {
                         build(&builder, mov(rd, im));
                         return true;
@@ -1547,6 +1488,123 @@ parse_reg_offset :: inline proc(using parser: ^Parser) -> (Reg, i64, bool) {
     return Reg{}, i64{}, false;
 }
 
+parse_values :: inline proc(using parser: ^Parser) -> bool {
+    if typ := expect(parser, Type_Name); typ != nil {
+        if allow(parser, "[") != nil {
+            for {
+                switch typ.text {
+                case "i64", "i32", "i16", "i8":
+                    if im, ok := parse_int(parser); ok {
+                        switch typ.text {
+                        case "i64":
+                            value := i64(im);
+                            add_bytes(&builder, mem.ptr_to_bytes(&value));
+                        case "i32":
+                            value := i32(im);
+                            add_bytes(&builder, mem.ptr_to_bytes(&value));
+                        case "i16":
+                            value := i16(im);
+                            add_bytes(&builder, mem.ptr_to_bytes(&value));
+                        case "i8":
+                            value := i8(im);
+                            add_bytes(&builder, mem.ptr_to_bytes(&value));
+                        }
+                    }
+                case "u64", "u32", "u16", "u8":
+                    if im, ok := parse_uint(parser); ok {
+                        switch typ.text {
+                        case "u64":
+                            value := u64(im);
+                            add_bytes(&builder, mem.ptr_to_bytes(&value));
+                        case "u32":
+                            value := u32(im);
+                            add_bytes(&builder, mem.ptr_to_bytes(&value));
+                        case "u16":
+                            value := u16(im);
+                            add_bytes(&builder, mem.ptr_to_bytes(&value));
+                        case "u8":
+                            value := u8(im);
+                            add_bytes(&builder, mem.ptr_to_bytes(&value));
+                        }
+                    }
+                case "f64", "f32":
+                    if im, ok := parse_float(parser); ok {
+                        switch typ.text {
+                        case "f64":
+                            value := f64(im);
+                            add_bytes(&builder, mem.ptr_to_bytes(&value));
+                        case "f32":
+                            value := f32(im);
+                            add_bytes(&builder, mem.ptr_to_bytes(&value));
+                        }
+                    }
+                }
+
+                if allow(parser, ",") == nil {
+                    if expect(parser, "]") != nil {
+                        return true;
+                    }
+                    
+                    break;
+                }
+            }
+        }
+        else {
+            switch typ.text {
+            case "i64", "i32", "i16", "i8":
+                if im, ok := parse_int(parser); ok {
+                    switch typ.text {
+                    case "i64":
+                        value := i64(im);
+                        add_bytes(&builder, mem.ptr_to_bytes(&value));
+                    case "i32":
+                        value := i32(im);
+                        add_bytes(&builder, mem.ptr_to_bytes(&value));
+                    case "i16":
+                        value := i16(im);
+                        add_bytes(&builder, mem.ptr_to_bytes(&value));
+                    case "i8":
+                        value := i8(im);
+                        add_bytes(&builder, mem.ptr_to_bytes(&value));
+                    }
+                }
+            case "u64", "u32", "u16", "u8":
+                if im, ok := parse_uint(parser); ok {
+                    switch typ.text {
+                    case "u64":
+                        value := u64(im);
+                        add_bytes(&builder, mem.ptr_to_bytes(&value));
+                    case "u32":
+                        value := u32(im);
+                        add_bytes(&builder, mem.ptr_to_bytes(&value));
+                    case "u16":
+                        value := u16(im);
+                        add_bytes(&builder, mem.ptr_to_bytes(&value));
+                    case "u8":
+                        value := u8(im);
+                        add_bytes(&builder, mem.ptr_to_bytes(&value));
+                    }
+                }
+            case "f64", "f32":
+                if im, ok := parse_float(parser); ok {
+                    switch typ.text {
+                    case "f64":
+                        value := f64(im);
+                        add_bytes(&builder, mem.ptr_to_bytes(&value));
+                    case "f32":
+                        value := f32(im);
+                        add_bytes(&builder, mem.ptr_to_bytes(&value));
+                    }
+                }
+            }
+
+            return true;
+        }
+    }
+
+    return false;
+}
+
 parse_im :: inline proc(using parser: ^Parser) -> (i64, bool) {
     switch token.kind {
     case Int:
@@ -1554,7 +1612,7 @@ parse_im :: inline proc(using parser: ^Parser) -> (i64, bool) {
             return i, ok;
         }
 
-    case Uint:
+    case Uint, Char:
         if u, ok := parse_uint(parser); ok {
             return (^i64)(&u)^, ok;
         }
@@ -1572,24 +1630,32 @@ parse_int :: inline proc(using parser: ^Parser) -> (i64, bool) {
     if tok := allow(parser, Int, Uint); tok != nil {
         return strconv.parse_i64(tok.text), true;
     }
+    else if tok := expect(parser, Char); tok != nil {
+        char := tok.text[1];
+        return i64(char), true;
+    }
 
-    return 0, true;
+    return 0, false;
 }
 
 parse_uint :: inline proc(using parser: ^Parser) -> (u64, bool) {
     if tok := allow(parser, Uint); tok != nil {
         return strconv.parse_u64(tok.text), true;
     }
+    else if tok := expect(parser, Char); tok != nil {
+        char := tok.text[1];
+        return u64(char), true;
+    }
 
-    return 0, true;
+    return 0, false;
 }
 
 parse_float :: inline proc(using parser: ^Parser) -> (f64, bool) {
-    if tok := allow(parser, Float); tok != nil {
+    if tok := expect(parser, Float); tok != nil {
         return strconv.parse_f64(tok.text), true;
     }
 
-    return 0, true;
+    return 0, false;
 }
 
 parse_ref :: inline proc(using parser: ^Parser, rel := false) -> (i64, bool) {
