@@ -6,7 +6,7 @@
  *  @Creation: 13-02-2018 11:04:31 UTC-5
  *
  *  @Last By:   Brendan Punsky
- *  @Last Time: 13-08-2018 11:02:59 UTC-5
+ *  @Last Time: 18-10-2018 20:42:05 UTC-5
  *  
  *  @Description:
  *  
@@ -15,7 +15,7 @@
 package sdf
 
 import "core:fmt"
-import "core:math"
+using import "core:math"
 import "core:mem"
 import "core:strings"
 
@@ -40,23 +40,20 @@ FRAME_TIMINGS :: true;
 
 
 
-
-
-
 Object :: struct {
-    code : Code,
+    code: Code,
 
-    pos : Vec2,
-    vel : Vec2,
-    acc : Vec2,
-    mass : f32,
+    pos:  Vec2,
+    vel:  Vec2,
+    acc:  Vec2,
+    mass: f32,
 
-    color : Color,
+    color: Color,
 
-    fixed : bool,
+    fixed: bool,
 
-    diameter : f32,
-    thickness : f32,
+    diameter:  f32,
+    thickness: f32,
 }
 
 new_ring :: proc(pos : Vec2, diameter, thickness : f32, mass : f32, color : Color, fixed := false) -> Object {
@@ -103,7 +100,7 @@ main :: proc() {
     box : Box;
     box.pos = -(Vec2{WINDOW_WIDTH, WINDOW_HEIGHT}/2);
     box.dim = Vec2{300, 100};
-    box.color = red;
+    box.color = RED;
     
     layout :: proc(pos : Vec2, dim : Vec2, x : Vec2) -> (res : Vec2) {
         return;
@@ -123,12 +120,12 @@ main :: proc() {
     }
 
     default_objects := [?]Object{
-        new_ring(Vec2{   0,    0}, 70, 10, 70000, green,  true),
-        new_disk(Vec2{ 200,  -20}, 20,     100, red),
-        new_disk(Vec2{-300,  250}, 10,     100, yellow),
-        new_disk(Vec2{ 460,  -92}, 10,     100, teal),
-        new_disk(Vec2{-100,   30}, 15,     100, blue),
-        new_disk(Vec2{-100, -100}, 10,     100, purple),
+        new_ring(Vec2{   0,    0}, 70, 10, 70000, GREEN,  true),
+        new_disk(Vec2{ 200,  -20}, 20,     100,   RED),
+        new_disk(Vec2{-300,  250}, 10,     100,   YELLOW),
+        new_disk(Vec2{ 460,  -92}, 10,     100,   TEAL),
+        new_disk(Vec2{-100,   30}, 15,     100,   BLUE),
+        new_disk(Vec2{-100, -100}, 10,     100,   PURPLE),
     };
 
     objects : [dynamic]Object;
@@ -163,11 +160,11 @@ main :: proc() {
 
         if left == glfw.PRESS {
             size *= 1.1;
-            ring(cursor, size, size * 0.2, white);
+            ring(cursor, size, size * 0.2, WHITE);
         }
         else if left == glfw.RELEASE {
             if old_left == glfw.PRESS {
-                append(&objects, new_ring(cursor, size, size * 0.2, size, white));
+                append(&objects, new_ring(cursor, size, size * 0.2, size, WHITE));
                 size = 5.0;
             }
         }

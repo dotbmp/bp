@@ -6,13 +6,13 @@
  *  @Creation: 13-02-2018 06:58:01 UTC-5
  *
  *  @Last By:   Brendan Punsky
- *  @Last Time: 22-08-2018 11:38:22 UTC-5
+ *  @Last Time: 11-09-2018 21:50:28 UTC-5
  *  
  *  @Description:
  *  
  */
 
-package cel;
+package cel
 
 import "core:fmt"
 import "core:mem"
@@ -164,13 +164,13 @@ parse_file :: inline proc(path: string) -> (^cel.Parser, bool) {
 
 
 
-Raw_Map_Entry :: struct(Value: type) {
+Raw_Map_Entry :: struct(Value: typeid) {
     key:    __Map_Key,
     next:  int,
     value: cel.Value,
 }
 
-Raw_Map :: struct(Value: type) {
+Raw_Map :: struct(Value: typeid) {
     hashes  : [dynamic]int,
     entries : [dynamic]Raw_Map_Entry(Value),
 }
@@ -178,7 +178,7 @@ Raw_Map :: struct(Value: type) {
 
 
 unmarshal :: proc(data: any, value: cel.Value) -> bool {
-    type_info := runtime.type_info_base_without_enum(type_info_of(data.typeid));
+    type_info := runtime.type_info_base_without_enum(type_info_of(data.id));
     type_info  = runtime.type_info_base_without_enum(type_info); // @todo: dirty fucking hack, won't hold up
 
     switch v in value {
@@ -192,7 +192,7 @@ unmarshal :: proc(data: any, value: cel.Value) -> bool {
                 if val, ok := v[field]; ok {
                     if !unmarshal(a, val) do return false; // @error
                 } else {
-                    type_info := runtime.type_info_base_without_enum(type_info_of(a.typeid));
+                    type_info := runtime.type_info_base_without_enum(type_info_of(a.id));
                     type_info  = runtime.type_info_base_without_enum(type_info); // @todo: dirty fucking hack, won't hold up
 
                     mem.set(a.data, 0, type_info.size);
@@ -340,7 +340,7 @@ unmarshal_string_to_any :: inline proc(data: any, txt: string) -> bool {
     return false;
 }
 
-unmarshal_string_to_type :: inline proc(T: type, txt: string) -> (T, bool) {
+unmarshal_string_to_type :: inline proc($T: typeid, txt: string) -> (T, bool) {
     if parser, ok := parse(txt); ok {
         defer cel.destroy(parser);
 
@@ -366,7 +366,7 @@ unmarshal_file_to_any :: inline proc(data: any, path: string) -> bool {
     return false;
 }
 
-unmarshal_file_to_type :: inline proc(T: type, path: string) -> (T, bool) {
+unmarshal_file_to_type :: inline proc($T: typeid, path: string) -> (T, bool) {
     if parser, ok := parse_file(path); ok {
         defer cel.destroy(parser);
 
@@ -381,7 +381,7 @@ unmarshal_file_to_type :: inline proc(T: type, path: string) -> (T, bool) {
 
 
 marshal :: proc(data: any) -> cel.Value {
-    type_info := runtime.type_info_base_without_enum(type_info_of(data.typeid));
+    type_info := runtime.type_info_base_without_enum(type_info_of(data.id));
     type_info  = runtime.type_info_base_without_enum(type_info);
 
     value: cel.Value;

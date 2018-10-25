@@ -6,7 +6,7 @@
  *  @Creation: 13-02-2018 11:04:23 UTC-5
  *
  *  @Last By:   Brendan Punsky
- *  @Last Time: 13-08-2018 22:52:09 UTC-5
+ *  @Last Time: 19-10-2018 09:23:26 UTC-5
  *  
  *  @Description:
  *  
@@ -14,52 +14,42 @@
 
 package sdf
 
-import "core:math"
+using import "core:math"
 import "core:os"
 
 import "shared:odin-gl"
 import "shared:odin-glfw"
 
 
+Color :: Vec4;
 
-white := Color{1, 1, 1, 1};
-black := Color{0, 0, 0, 1};
 
-red   := Color{1, 0, 0, 1};
-green := Color{0, 1, 0, 1};
-blue  := Color{0, 0, 1, 1};
+WHITE := Color{1, 1, 1, 1};
+BLACK := Color{0, 0, 0, 1};
 
-yellow := Color{1, 1, 0, 1};
-purple := Color{1, 0, 1, 1};
-teal   := Color{0, 1, 1, 1};
+RED   := Color{1, 0, 0, 1};
+GREEN := Color{0, 1, 0, 1};
+BLUE  := Color{0, 0, 1, 1};
 
+YELLOW := Color{1, 1, 0, 1};
+PURPLE := Color{1, 0, 1, 1};
+TEAL   := Color{0, 1, 1, 1};
 
 
   VERTEX_SHADER :: "shaders/sdf.vs";
 FRAGMENT_SHADER :: "shaders/sdf.fs";
 
 
-
-Vec2 :: math.Vec2;
-Vec3 :: math.Vec3;
-Vec4 :: math.Vec4;
-
-Color :: math.Vec4;
-
-
-
-_program : u32;
+_program: u32;
 
 when os.OS == "windows" {
-    _ftime   : os.File_Time;
-    _vtime   : os.File_Time;
+    _ftime: os.File_Time;
+    _vtime: os.File_Time;
 }
 
-_vao : u32;
-
-_buffer  :  u32;
-_dirty   := true;
-
+_vao: u32;
+_buffer: u32;
+_dirty := true;
 
 
 Operation :: enum u32 {
@@ -88,34 +78,32 @@ Code :: enum u32 {
 }
 
 Command :: struct {
-    operation : Operation,
-    code      : Code,
-    id0, id1  : u32,
-    params    : [16]f32,
+    operation: Operation,
+    code:      Code,
+    id0, id1:  u32,
+    params:    [16]f32,
 }
-
 
 
 commands := make([dynamic]Command, 0, 1024);
 
 
-
 Disk :: struct {
-    pos      : Vec2,
-    diameter : f32,
-    color    : Color,
+    pos:      Vec2,
+    diameter: f32,
+    color:    Color,
 }
 
 disk :: proc[disk_type, disk_args];
 
-disk_type :: inline proc(using disk : Disk) -> int {
+disk_type :: inline proc(using disk: Disk) -> int {
     return disk_args(pos, diameter, color);
 }
 
-disk_args :: proc(pos : Vec2, diameter : f32, color := Color{1, 1, 1, 1}, operation := Operation.Draw) -> int {
+disk_args :: proc(pos: Vec2, diameter: f32, color := Color{1, 1, 1, 1}, operation := Operation.Draw) -> int {
     _dirty = true;
 
-    command : Command;
+    command: Command;
     command.operation = operation;
     command.code      = Code.Disk;
     command.params[0] = color.x;
@@ -130,24 +118,23 @@ disk_args :: proc(pos : Vec2, diameter : f32, color := Color{1, 1, 1, 1}, operat
 }
 
 
-
 Ring :: struct {
-    pos       : Vec2,
-    diameter  : f32,
-    thickness : f32,
-    color     : Color,
+    pos:       Vec2,
+    diameter:  f32,
+    thickness: f32,
+    color:     Color,
 }
 
 ring :: proc[ring_type, ring_args];
 
-ring_type :: inline proc(using ring : Ring) -> int {
+ring_type :: inline proc(using ring: Ring) -> int {
     return ring_args(pos, diameter, thickness, color);
 }
 
-ring_args :: proc(pos : Vec2, diameter, thickness : f32, color := Color{1, 1, 1, 1}, operation := Operation.Draw) -> int {
+ring_args :: proc(pos: Vec2, diameter, thickness: f32, color := Color{1, 1, 1, 1}, operation := Operation.Draw) -> int {
     _dirty = true;
 
-    command : Command;
+    command: Command;
     command.operation = operation;
     command.code      = Code.Ring;
     command.params[0] = color.x;
@@ -163,23 +150,32 @@ ring_args :: proc(pos : Vec2, diameter, thickness : f32, color := Color{1, 1, 1,
 }
 
 
-
 Box :: struct {
-    pos   : Vec2,
-    dim   : Vec2,
-    color : Color,
+    pos:   Vec2,
+    dim:   Vec2,
+    color: Color,
 }
 
 box :: proc[box_type, box_args];
 
-box_type :: inline proc(using box : Box) -> int {
+box_type :: inline proc(using box: Box) -> int {
     return box_args(pos, dim, color);
 }
 
-box_args :: proc(pos : Vec2, dim : Vec2, color := Color{1, 1, 1, 1}, operation := Operation.Draw) -> int {
+box_args :: proc(pos: Vec2, dim: Vec2, color := Color{1, 1, 1, 1}, operation := Operation.Draw) -> int {
     _dirty = true;
 
-    command : Command;
+    if dim.x < 0 {
+        pos.x += dim.x;
+        dim.x = -dim.x;
+    }
+
+    if dim.y < 0 {
+        pos.y += dim.y;
+        dim.y = -dim.y;
+    }
+
+    command: Command;
     command.operation = operation;
     command.code      = Code.Box;
     command.params[0] = color.x;
@@ -195,24 +191,23 @@ box_args :: proc(pos : Vec2, dim : Vec2, color := Color{1, 1, 1, 1}, operation :
 }
 
 
-
 Rect :: struct {
-    pos       : Vec2,
-    dim       : Vec2,
-    thickness : f32,
-    color     : Color,
+    pos:       Vec2,
+    dim:       Vec2,
+    thickness: f32,
+    color:     Color,
 }
 
 rect :: proc[rect_type, rect_args];
 
-rect_type :: inline proc(using rect : Rect) -> int {
+rect_type :: inline proc(using rect: Rect) -> int {
     return rect_args(pos, dim, thickness, color);
 }
 
-rect_args :: proc(pos : Vec2, dim : Vec2, thickness : f32, color := Color{1, 1, 1, 1}, operation := Operation.Draw) -> int {
+rect_args :: proc(pos: Vec2, dim: Vec2, thickness: f32, color := Color{1, 1, 1, 1}, operation := Operation.Draw) -> int {
     _dirty = true;
 
-    command : Command;
+    command: Command;
     command.operation = operation;
     command.code      = Code.Rect;
     command.params[0] = color.x;
@@ -229,25 +224,24 @@ rect_args :: proc(pos : Vec2, dim : Vec2, thickness : f32, color := Color{1, 1, 
 }
 
 
-
 RBox :: struct {
-    pos       : Vec2,
-    dim       : Vec2,
-    radius    : f32,
-    thickness : f32,
-    color     : Color,
+    pos:       Vec2,
+    dim:       Vec2,
+    radius:    f32,
+    thickness: f32,
+    color:     Color,
 }
 
 rbox :: proc[rbox_type, rbox_args];
 
-rbox_type :: inline proc(using rbox : RBox) -> int {
+rbox_type :: inline proc(using rbox: RBox) -> int {
     return rbox_args(pos, dim, radius, color);
 }
 
-rbox_args :: proc(pos : Vec2, dim : Vec2, radius : f32, color := Color{1, 1, 1, 1}, operation := Operation.Draw) -> int {
+rbox_args :: proc(pos: Vec2, dim: Vec2, radius: f32, color := Color{1, 1, 1, 1}, operation := Operation.Draw) -> int {
     _dirty = true;
 
-    command : Command;
+    command: Command;
     command.operation = operation;
     command.code      = Code.Rounded_Box;
     command.params[0] = color.x;
@@ -264,25 +258,24 @@ rbox_args :: proc(pos : Vec2, dim : Vec2, radius : f32, color := Color{1, 1, 1, 
 }
 
 
-
 RRect :: struct {
-    pos       : Vec2,
-    dim       : Vec2,
-    radius    : f32,
-    thickness : f32,
-    color     : Color,
+    pos:       Vec2,
+    dim:       Vec2,
+    radius:    f32,
+    thickness: f32,
+    color:     Color,
 }
 
 rrect :: proc[rrect_type, rrect_args];
 
-rrect_type :: proc(using rrect : RRect) -> int {
+rrect_type :: proc(using rrect: RRect) -> int {
     return rrect_args(pos, dim, radius, thickness, color);
 }
 
-rrect_args :: proc(pos : Vec2, dim : Vec2, radius, thickness : f32, color := Color{1, 1, 1, 1}, operation := Operation.Draw) -> int {
+rrect_args :: proc(pos: Vec2, dim: Vec2, radius, thickness: f32, color := Color{1, 1, 1, 1}, operation := Operation.Draw) -> int {
     _dirty = true;
 
-    command : Command;
+    command: Command;
     command.operation = operation;
     command.code      = Code.Rounded_Rect;
     command.params[0] = color.x;
@@ -300,13 +293,12 @@ rrect_args :: proc(pos : Vec2, dim : Vec2, radius, thickness : f32, color := Col
 }
 
 
+line :: proc(vec2: Vec2, dim: Vec2, radius: f32) -> int {return 0;};
 
-line :: proc(vec2 : Vec2, dim : Vec2, radius : f32) -> int {return 0;};
-
-intersect :: proc(a, b : int, color := Color{1, 1, 1, 1}, operation := Operation.Draw) -> int {
+intersect :: proc(a, b: int, color := Color{1, 1, 1, 1}, operation := Operation.Draw) -> int {
     _dirty = true;
 
-    command : Command;
+    command: Command;
     command.operation = operation;
     command.code      = Code.Intersect;
     command.id0       = u32(a);
@@ -319,10 +311,10 @@ intersect :: proc(a, b : int, color := Color{1, 1, 1, 1}, operation := Operation
     return append(&commands, command);
 }
 
-substract :: proc(a, b : int, color := Color{1, 1, 1, 1}, operation := Operation.Draw) -> int {
+substract :: proc(a, b: int, color := Color{1, 1, 1, 1}, operation := Operation.Draw) -> int {
     _dirty = true;
 
-    command : Command;
+    command: Command;
     command.operation = operation;
     command.code      = Code.Substract;
     command.id0       = u32(a);
@@ -335,10 +327,10 @@ substract :: proc(a, b : int, color := Color{1, 1, 1, 1}, operation := Operation
     return append(&commands, command);
 }
 
-unify :: proc(a, b : int, color := Color{1, 1, 1, 1}, operation := Operation.Draw) -> int {
+unify :: proc(a, b: int, color := Color{1, 1, 1, 1}, operation := Operation.Draw) -> int {
     _dirty = true;
 
-    command : Command;
+    command: Command;
     command.operation = operation;
     command.code      = Code.Unify;
     command.id0       = u32(a);
@@ -351,10 +343,10 @@ unify :: proc(a, b : int, color := Color{1, 1, 1, 1}, operation := Operation.Dra
     return append(&commands, command);   
 }
 
-repeat :: proc(i : u32, pos : Vec2, spread : Vec2, color := Color{1, 1, 1, 1}, operation := Operation.Draw) -> int {
+repeat :: proc(i: u32, pos: Vec2, spread: Vec2, color := Color{1, 1, 1, 1}, operation := Operation.Draw) -> int {
     _dirty = true;
 
-    command : Command;
+    command: Command;
     command.operation = operation;
     command.code      = Code.Repeat;
     command.id0       = u32(i);
@@ -369,7 +361,6 @@ repeat :: proc(i : u32, pos : Vec2, spread : Vec2, color := Color{1, 1, 1, 1}, o
 
     return append(&commands, command);
 }
-
 
 
 init :: proc() -> () {
@@ -387,11 +378,10 @@ init :: proc() -> () {
 }
 
 
-
-draw :: proc(w, h : int) {
+draw :: proc(w, h: int) {
     gl.BindBuffer(gl.SHADER_STORAGE_BUFFER, _buffer);
     
-    if _dirty {
+    if _dirty && len(commands) > 0 {
         gl.BufferData(gl.SHADER_STORAGE_BUFFER, cap(commands) * size_of(Command), &commands[0], gl.DYNAMIC_DRAW);
         gl.BindBufferRange(gl.SHADER_STORAGE_BUFFER, 0, _buffer, 0, cap(commands) * size_of(Command));
 

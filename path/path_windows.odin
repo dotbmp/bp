@@ -6,7 +6,7 @@
  *  @Creation: 29-05-2018 09:51:15 UTC-5
  *
  *  @Last By:   Brendan Punsky
- *  @Last Time: 12-08-2018 21:08:10 UTC-5
+ *  @Last Time: 05-10-2018 18:25:59 UTC-5
  *  
  *  @Description:
  *  
@@ -20,12 +20,10 @@ import "core:strings"
 import "core:sys/win32"
 
 
-
 SEPARATOR :: '\\';
 
 
-
-long :: proc(path : string) -> string {
+long :: proc(path: string) -> string {
     foreign kernel32 {
         GetLongPathNameA :: proc "std" (short, long : ^byte, len : u32) -> u32 ---;
     }
@@ -46,7 +44,7 @@ long :: proc(path : string) -> string {
     return "";
 }
 
-short :: proc(path : string) -> string {
+short :: proc(path: string) -> string {
     foreign kernel32 {
         GetShortPathNameA :: proc "std" (long, short : ^byte, len : u32) -> u32 ---;
     }
@@ -67,7 +65,7 @@ short :: proc(path : string) -> string {
     return "";
 }
 
-full :: proc(path : string) -> string {
+full :: proc(path: string) -> string {
     foreign kernel32 {
         GetFullPathNameA :: proc "std" (filename : ^byte, buffer_length : u32, buffer : ^byte, file_part : ^^byte) -> u32 ---;
     }
@@ -89,7 +87,6 @@ full :: proc(path : string) -> string {
 }
 
 
-
 current :: proc() -> string {
     foreign kernel32 {
         GetCurrentDirectoryA :: proc "std" (buffer_length : u32, buffer : ^byte) -> u32 ---;
@@ -109,8 +106,7 @@ current :: proc() -> string {
 }
 
 
-
-exists :: proc(path : string) -> bool {
+exists :: proc(path: string) -> bool {
     c_path := strings.new_cstring(path);
     defer delete(c_path);
 
@@ -119,7 +115,7 @@ exists :: proc(path : string) -> bool {
     return i32(attribs) != win32.INVALID_FILE_ATTRIBUTES;
 }
 
-is_dir :: proc(path : string) -> bool {
+is_dir :: proc(path: string) -> bool {
     c_path := strings.new_cstring(path);
     defer delete(c_path);
 
@@ -128,7 +124,7 @@ is_dir :: proc(path : string) -> bool {
     return (i32(attribs) != win32.INVALID_FILE_ATTRIBUTES) && (attribs & win32.FILE_ATTRIBUTE_DIRECTORY == win32.FILE_ATTRIBUTE_DIRECTORY);
 }
 
-is_file :: proc(path : string) -> bool {
+is_file :: proc(path: string) -> bool {
     c_path := strings.new_cstring(path);
     defer delete(c_path);
 
@@ -138,8 +134,7 @@ is_file :: proc(path : string) -> bool {
 }
 
 
-
-drive :: proc(path : string, new := false) -> string {
+drive :: proc(path: string, new := false) -> string {
     if len(path) >= 3 {
         letter := path[:1];
 

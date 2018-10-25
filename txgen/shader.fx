@@ -6,8 +6,6 @@ out vec4 fragColor;
 uniform vec2 iResolution;
 uniform float iTime;
 uniform vec2 iCursor;
-uniform bool iClickLeft;
-uniform bool iClickRight;
 
 
 #define CI vec3(.3,.5,.6)

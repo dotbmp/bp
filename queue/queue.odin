@@ -6,7 +6,7 @@
  *  @Creation: 19-07-2018 17:51:16 UTC-5
  *
  *  @Last By:   Brendan Punsky
- *  @Last Time: 12-08-2018 23:44:53 UTC-5
+ *  @Last Time: 18-10-2018 19:36:22 UTC-5
  *  
  *  @Description:
  *  
@@ -17,14 +17,13 @@ package queue
 import "core:mem"
 
 
-
 Wrap_Mode :: enum int {
     Wrap,
     Assert,
     Silent,
 };
 
-Queue :: struct(T: type) {
+Queue :: struct(T: typeid) {
     data: ^T,
     len:  int,
     cap:  int,
@@ -32,7 +31,7 @@ Queue :: struct(T: type) {
     tail: int,
 }
 
-make_queue :: inline proc(T: type, cap: int) -> Queue(T) {
+make_queue :: inline proc($T: typeid, cap: int) -> Queue(T) {
     return Queue(T){data=(^T)(mem.alloc(cap * size_of(T))), cap=cap};
 }
 
@@ -48,7 +47,10 @@ peek :: inline proc(queue: ^Queue($T)) -> ^T {
     return peek_tail(queue);
 }
 
-pop :: inline proc(queue: ^Queue($T)) -> ^T {
+import "core:runtime"
+pop :: proc[runtime.pop, pop_queue];
+
+pop_queue :: inline proc(queue: ^Queue($T)) -> ^T {
     return pop_tail(queue);
 }
 
@@ -146,7 +148,7 @@ pop_head :: inline proc(queue: ^Queue($T)) -> ^T {
 }
 
 get :: inline proc(queue: ^Queue($T), index: int) -> ^T {
-    return queue.data + ((queue.cap + queue.tail + index) % queue.cap);
+    return mem.ptr_offset(queue.data, (queue.cap + queue.tail + index) % queue.cap);
 }
 
 /*
@@ -225,3 +227,5 @@ test :: proc() {
     test_silent();
     test_assert();
 }
+
+main :: proc() do test();

@@ -6,7 +6,7 @@
  *  @Creation: 28-11-2017 00:10:03 UTC-5
  *
  *  @Last By:   Brendan Punsky
- *  @Last Time: 11-08-2018 10:38:57 UTC-5
+ *  @Last Time: 17-09-2018 20:49:08 UTC-5
  *  
  *  @Description:
  *  
@@ -19,7 +19,7 @@ import "core:mem"
 
 
 // remove_unordered requires indices to be in order or it can fuck up big time
-unordered :: proc(array: ^[dynamic]$T, indices: ..int) {
+remove_unordered :: proc(array: ^[dynamic]$T, indices: ..int) {
     assert(array != nil && len(array^) != 0);
 
     a := cast(^mem.Raw_Dynamic_Array) array;
@@ -37,7 +37,7 @@ unordered :: proc(array: ^[dynamic]$T, indices: ..int) {
     }
 }
 
-ordered :: proc(array: ^[dynamic]$T, indices: ..int) {
+remove_ordered :: proc(array: ^[dynamic]$T, indices: ..int) {
     assert(array != nil && len(array^) != 0);
 
     a := cast(^mem.Raw_Dynamic_Array) array;
@@ -54,7 +54,7 @@ ordered :: proc(array: ^[dynamic]$T, indices: ..int) {
     }
 }
 
-unordered_value :: proc(array: ^[dynamic]$T, values: ..T) {
+remove_unordered_value :: proc(array: ^[dynamic]$T, values: ..T) {
     assert(array != nil && len(array^) != 0);
 
     indices := make([dynamic]int, 0, len(values));
@@ -70,10 +70,10 @@ unordered_value :: proc(array: ^[dynamic]$T, values: ..T) {
         }
     }
 
-    unordered(array, ..indices[:]);
+    remove_unordered(array, ..indices[:]);
 }
 
-ordered_value :: proc(array: ^[dynamic]$T, values: ..T) {
+remove_ordered_value :: proc(array: ^[dynamic]$T, values: ..T) {
     assert(array != nil && len(array^) != 0);
 
     indices := make([dynamic]int, 0, len(values));
@@ -92,9 +92,29 @@ ordered_value :: proc(array: ^[dynamic]$T, values: ..T) {
     ordered(array, ..indices[:]);
 }
 
+insert :: proc(array: ^[dynamic]$T, index: int, values: ..T) {
+    inline assert(array != nil);
+
+    a := (^mem.Raw_Dynamic_Array)(array);
+    length := len(values);
+
+    if a.len < index + length {
+        reserve(array, index + length - a.len);
+    }
+
+    a.len += length;
+
+    copy(array[index + length:], array[index:length]);
+    copy(array[index:length], values);
+}
+
+prepend :: inline proc(array: ^[dynamic]$T, value: ..T) {
+    insert(array, 0, ..value);
+}
+
 pop_front :: inline proc(array: ^[dynamic]$T) -> T {
     tmp := array[0];
-    ordered(array, 0);
+    inline remove_ordered(array, 0);
     return tmp;
 }
 

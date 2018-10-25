@@ -6,7 +6,7 @@
  *  @Creation: 13-08-2018 11:01:28 UTC-5
  *
  *  @Last By:   Brendan Punsky
- *  @Last Time: 21-08-2018 10:10:34 UTC-5
+ *  @Last Time: 04-09-2018 15:20:12 UTC-5
  *  
  *  @Description:
  *  
@@ -15,6 +15,7 @@
 package txgen
 
 import "core:fmt"
+import "core:math"
 import "core:mem"
 import "core:os"
 
@@ -46,7 +47,6 @@ BITMAP :: "test.bmp";
 
 
 main :: proc() {
-    fmt.println("yo");
     window := glfw.init_helper(WIDTH, HEIGHT, WINDOW_TITLE, OPENGL_MAJOR, OPENGL_MINOR, ANTIALIASING, VSYNC);
 
     gl.load_up_to(OPENGL_MAJOR, OPENGL_MINOR, glfw.set_proc_address);

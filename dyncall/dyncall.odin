@@ -6,7 +6,7 @@
  *  @Creation: 31-07-2018 10:33:13 UTC-5
  *
  *  @Last By:   Brendan Punsky
- *  @Last Time: 08-08-2018 19:58:37 UTC-5
+ *  @Last Time: 09-10-2018 16:45:45 UTC-5
  *  
  *  @Description:
  *  
@@ -303,12 +303,12 @@ call_odin :: proc(vm : ^Call_VM, cb : rawptr, args : []any, rets : []any) {
     reset(vm);
     mode(vm, CALL_C_DEFAULT);
 
-    context <- Context{} {
-        arg_pointer(vm, context.parent);
-    }
-
     for a in args {
         arg(vm, a);
+    }
+
+    context <- Context{} {
+        arg_pointer(vm, context.parent);
     }
 
     call(vm, ret);

@@ -6,7 +6,7 @@
  *  @Creation: 28-11-2017 00:10:03 UTC-5
  *
  *  @Last By:   Brendan Punsky
- *  @Last Time: 12-08-2018 21:08:38 UTC-5
+ *  @Last Time: 25-10-2018 09:03:51 UTC-5
  *  
  *  @Description:
  *  
@@ -18,69 +18,59 @@ import "core:strings"
 import "core:unicode/utf8"
 
 
-
 dir :: proc(path: string, new := false) -> string {
-    if is_file(path) {
-        for i := len(path)-1; i >= 0; i -= 1 {
-            switch path[i] {
+    for i := len(path)-1; i >= 0; i -= 1 {
+        switch path[i] {
+        case '/', '\\':
+            return new ? strings.new_string(path[:i]) : path[:i];
+        }
+     }
+
+    return new ? strings.new_string(path) : path;
+}
+
+file :: proc(path: string, new := false) -> string {
+    end := len(path)-1;
+
+    for i := end; i >= 0; i -= 1 {
+        switch path[i] {
             case '/', '\\':
-                return new ? strings.new_string(path[:i]) : path[:i];
-            }
+                if i != end {
+                    return new ? strings.new_string(path[i+1:]) : path[i+1:];
+                }
+                else {
+                    return ""; // @note(bpunsky): only a directory could have `/` or `\` at the end, this should never be reached
+                }
         }
     }
 
     return new ? strings.new_string(path) : path;
 }
 
-file :: proc(path : string, new := false) -> string {
-    if is_file(path) {
-        end := len(path)-1;
+name :: proc(path: string, new := false) -> string {
+    end := len(path) - 1;
+    dot := end;
 
-        for i := end; i >= 0; i -= 1 {
-            switch path[i] {
-                case '/', '\\':
-                    if i != end {
-                        return new ? strings.new_string(path[i+1:]) : path[i+1:];
-                    }
-                    else {
-                        return ""; // @note(bpunsky): only a directory could have `/` or `\` at the end, this should never be reached
-                    }
-            }
-        }
-    }
-
-    return new ? strings.new_string(path) : path;
-}
-
-name :: proc(path : string, new := false) -> string {
-    if is_file(path) {
-        end := len(path) - 1;
-        dot := end;
-
-        for i := end; i >= 0; i -= 1 {
-            switch path[i] {
-            case '.':       dot = (dot == end ? i : dot);
-            case '/', '\\': return new ? strings.new_string(path[i+1:dot]) : path[i+1:dot];
-            }
+    for i := end; i >= 0; i -= 1 {
+        switch path[i] {
+        case '.':       dot = (dot == end ? i : dot);
+        case '/', '\\': return new ? strings.new_string(path[i+1:dot]) : path[i+1:dot];
         }
     }
 
     return "";
 }
 
-ext :: proc(path : string, new := false) -> string {
-    if is_file(path) {
-        for i := len(path)-1; i >= 0; i -= 1 {
-            switch path[i] {
-            case '/', '\\': return "";
-            case '.':       return new ? strings.new_string(path[i+1:]) : path[i+1:];
-            }
+ext :: proc(path: string, new := false) -> string {
+    for i := len(path)-1; i >= 0; i -= 1 {
+        switch path[i] {
+        case '/', '\\': return "";
+        case '.':       return new ? strings.new_string(path[i+1:]) : path[i+1:];
         }
     }
 
     return "";
 }
-
 
 
 // @note(bpunsky): the rel procs always return new memory, unless the result is ""
