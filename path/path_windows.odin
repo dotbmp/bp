@@ -6,7 +6,7 @@
  *  @Creation: 29-05-2018 09:51:15 UTC-5
  *
  *  @Last By:   Brendan Punsky
- *  @Last Time: 05-10-2018 18:25:59 UTC-5
+ *  @Last Time: 04-12-2018 23:11:21 UTC-5
  *  
  *  @Description:
  *  
@@ -21,6 +21,7 @@ import "core:sys/win32"
 
 
 SEPARATOR :: '\\';
+SEPARATOR_STRING :: "\\";
 
 
 long :: proc(path: string) -> string {

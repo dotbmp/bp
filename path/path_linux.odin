@@ -2,6 +2,7 @@ package path
 
 
 SEPARATOR :: '/';
+SEPARATOR_STRING :: "/";
 
 
 full :: proc(path: string) -> string {

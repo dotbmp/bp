@@ -6,7 +6,7 @@
  *  @Creation: 28-11-2017 00:10:03 UTC-5
  *
  *  @Last By:   Brendan Punsky
- *  @Last Time: 25-10-2018 09:03:51 UTC-5
+ *  @Last Time: 04-12-2018 20:08:24 UTC-5
  *  
  *  @Description:
  *  
@@ -19,7 +19,7 @@ import "core:unicode/utf8"
 
 
 dir :: proc(path: string, new := false) -> string {
-    for i := len(path)-1; i >= 0; i -= 1 {
+    for i := len(path) - 1; i >= 0; i -= 1 {
         switch path[i] {
         case '/', '\\':
             return new ? strings.new_string(path[:i]) : path[:i];
@@ -30,7 +30,7 @@ dir :: proc(path: string, new := false) -> string {
 }
 
 file :: proc(path: string, new := false) -> string {
-    end := len(path)-1;
+    end := len(path) - 1;
 
     for i := end; i >= 0; i -= 1 {
         switch path[i] {
@@ -48,8 +48,8 @@ file :: proc(path: string, new := false) -> string {
 }
 
 name :: proc(path: string, new := false) -> string {
-    end := len(path) - 1;
-    dot := end;
+    dot := len(path);
+    end := dot - 1;
 
     for i := end; i >= 0; i -= 1 {
         switch path[i] {
@@ -169,7 +169,9 @@ rel_between :: proc(from, to: string) -> string {
     else {
         buffer := make([]byte, from_slashes*3 + len(to));
 
-        for i in 0..from_slashes {
+        fmt.println(to);
+
+        for i in 0..from_slashes-1 {
             buffer[i*3+0] = '.';
             buffer[i*3+1] = '.';
             buffer[i*3+2] = SEPARATOR;
@@ -182,6 +184,8 @@ rel_between :: proc(from, to: string) -> string {
 
     return "";
 }
+
+import "core:fmt"
 
 rel_current :: proc(to: string) -> string {
     tmp := current();

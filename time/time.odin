@@ -6,7 +6,7 @@
  *  @Creation: 12-08-2018 17:25:15 UTC-5
  *
  *  @Last By:   Brendan Punsky
- *  @Last Time: 12-08-2018 23:08:31 UTC-5
+ *  @Last Time: 03-12-2018 16:54:44 UTC-5
  *  
  *  @Description:
  *  
@@ -58,6 +58,7 @@ hours   :: proc[from_hours,   duration_hours,   to_hours];
 minutes :: proc[from_minutes, duration_minutes, to_minutes];
 seconds :: proc[from_seconds, duration_seconds, to_seconds];
 ms      :: proc[from_ms,      duration_ms,      to_ms];
+us      :: proc[from_us,      duration_us,      to_us];
 ns      :: proc[from_ns,      duration_ns,      to_ns];
 
 from_years       :: inline proc(n: f64) -> Duration do return    days(n *  365);
@@ -67,7 +68,8 @@ from_days        :: inline proc(n: f64) -> Duration do return   hours(n *   24);
 from_hours       :: inline proc(n: f64) -> Duration do return minutes(n *   60);
 from_minutes     :: inline proc(n: f64) -> Duration do return seconds(n *   60);
 from_seconds     :: inline proc(n: f64) -> Duration do return      ms(n * 1000);
-from_ms          :: inline proc(n: f64) -> Duration do return      ns(n * 1000);
+from_ms          :: inline proc(n: f64) -> Duration do return      us(n * 1000);
+from_us          :: inline proc(n: f64) -> Duration do return      ns(n * 1000);
 from_ns          :: inline proc(n: f64) -> Duration do return  cast(Duration) n;
 
 duration_years   :: inline proc(n: int) -> Duration do return   years(cast(f64) n);
@@ -78,6 +80,7 @@ duration_hours   :: inline proc(n: int) -> Duration do return   hours(cast(f64) 
 duration_minutes :: inline proc(n: int) -> Duration do return minutes(cast(f64) n);
 duration_seconds :: inline proc(n: int) -> Duration do return seconds(cast(f64) n);
 duration_ms      :: inline proc(n: int) -> Duration do return      ms(cast(f64) n);
+duration_us      :: inline proc(n: int) -> Duration do return      us(cast(f64) n);
 duration_ns      :: inline proc(n: int) -> Duration do return      ns(cast(f64) n);
 
 to_years         :: inline proc(d: Duration) -> f64 do return    days(d) /  365; // leap years make this an estimate (365.25???)
@@ -87,7 +90,8 @@ to_days          :: inline proc(d: Duration) -> f64 do return   hours(d) /   24;
 to_hours         :: inline proc(d: Duration) -> f64 do return minutes(d) /   60;
 to_minutes       :: inline proc(d: Duration) -> f64 do return seconds(d) /   60;
 to_seconds       :: inline proc(d: Duration) -> f64 do return      ms(d) / 1000;
-to_ms            :: inline proc(d: Duration) -> f64 do return      ns(d) / 1000;
+to_ms            :: inline proc(d: Duration) -> f64 do return      us(d) / 1000;
+to_us            :: inline proc(d: Duration) -> f64 do return      ns(d) / 1000;
 to_ns            :: inline proc(d: Duration) -> f64 do return       cast(f64) d;
 
 DurationData :: struct {
@@ -151,7 +155,7 @@ get_duration :: proc(data: DurationData) -> Duration {
 }
 
 Timer :: struct {
-    ms_frequency: f64,
+    ms_frequency: u64,
     start_ticks:  u64,
 }
 
@@ -162,7 +166,7 @@ make_timer :: inline proc() -> Timer {
         w32.query_performance_frequency(cast(^i64) &timer.start_ticks);
     }
 
-    timer.ms_frequency = cast(f64) timer.start_ticks;
+    timer.ms_frequency = 0;
     start(&timer);
     
     return timer;
@@ -173,9 +177,8 @@ start :: inline proc(timer: ^Timer) do timer.start_ticks = ticks();
 query :: inline proc(timer: ^Timer, reset := false) -> Duration {
     t := ticks();
 
-    res := cast(Duration) (
-        (cast(f64) (t - timer.start_ticks)) /
-        (timer.ms_frequency / 1000000)
+    res := Duration(
+        f64(t - timer.start_ticks) * 1000 / f64(timer.ms_frequency)
     );
 
     if reset do start(timer);

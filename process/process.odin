@@ -6,7 +6,7 @@
  *  @Creation: 21-07-2018 00:40:38 UTC-5
  *
  *  @Last By:   Brendan Punsky
- *  @Last Time: 09-08-2018 22:24:14 UTC-5
+ *  @Last Time: 07-11-2018 21:36:50 UTC-5
  *  
  *  @Description:
  *  
@@ -37,7 +37,7 @@ foreign kernel32 {
     get_current_process :: proc "std" () -> win32.Handle ---;
 }
 
-create :: proc(format := "", args : ..any) -> bool {
+create :: proc(format := "", args: ..any) -> bool {
     cmd := fmt.aprintf(format, ..args);
     defer delete(cmd);
 
@@ -58,7 +58,40 @@ create :: proc(format := "", args : ..any) -> bool {
 
     pi: win32.Process_Information;
 
-    exit_code : u32;
+    exit_code: u32;
+
+    if win32.create_process_a(nil, ccmd, nil, nil, false, 0, nil, nil, &si, &pi) {
+        win32.wait_for_single_object(pi.process, win32.INFINITE);
+        win32.get_exit_code_process(pi.process, &exit_code);
+        win32.close_handle(pi.process);
+        win32.close_handle(pi.thread);
+    } else {
+        // failed to execute
+        exit_code = ~u32(0);
+    }
+
+    return exit_code == 0;
+}
+
+silent :: proc(format := "", args: ..any) -> bool {
+    cmd := fmt.aprintf(format, ..args);
+    defer delete(cmd);
+
+    ccmd := strings.new_cstring(cmd);
+    defer delete(ccmd);
+
+    si := win32.Startup_Info {
+        cb          = size_of(win32.Startup_Info),
+        flags       = win32.STARTF_USESTDHANDLES | win32.STARTF_USESHOWWINDOW,
+        show_window = win32.SW_SHOW,
+        stdin       = win32.Handle(os.stdin),
+        stdout      = win32.Handle(os.stdout),
+        stderr      = win32.Handle(os.stderr),
+    };
+
+    pi: win32.Process_Information;
+
+    exit_code: u32;
 
     if win32.create_process_a(nil, ccmd, nil, nil, false, 0, nil, nil, &si, &pi) {
         win32.wait_for_single_object(pi.process, win32.INFINITE);
