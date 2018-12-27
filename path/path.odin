@@ -75,7 +75,7 @@ ext :: proc(path: string, new := false) -> string {
 
 // @note(bpunsky): the rel procs always return new memory, unless the result is ""
 
-rel :: proc[rel_between, rel_current];
+rel :: proc{rel_between, rel_current};
 
 rel_between :: proc(from, to: string) -> string {
     from, to = full(from), full(to);
