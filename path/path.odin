@@ -6,7 +6,7 @@
  *  @Creation: 28-11-2017 00:10:03 UTC-5
  *
  *  @Last By:   Brendan Punsky
- *  @Last Time: 04-12-2018 20:08:24 UTC-5
+ *  @Last Time: 05-12-2018 06:04:52 UTC-5
  *  
  *  @Description:
  *  
@@ -168,8 +168,6 @@ rel_between :: proc(from, to: string) -> string {
     }
     else {
         buffer := make([]byte, from_slashes*3 + len(to));
-
-        fmt.println(to);
 
         for i in 0..from_slashes-1 {
             buffer[i*3+0] = '.';
